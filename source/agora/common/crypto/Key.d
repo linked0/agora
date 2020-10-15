@@ -22,8 +22,14 @@ import geod24.bitblob;
 import base32;
 import libsodium;
 
+import core.stdc.string : memcpy;
+import std.digest.hmac;
+import std.digest.sha : SHA512;
 import std.exception;
 import std.format;
+import std.string : representation;
+
+import std.stdio;
 
 
 /// Simple signature example
@@ -61,14 +67,44 @@ public struct KeyPair
     /// Seed
     public const Seed seed;
 
+    public PublicKey address2;
+
+    public SecretKey secret2;
+
+    public const uint depth;
+
+    public const uint child_count;
+
+    public const ubyte[4] finger_print;
+
+    ubyte[64] digest;
+
     /// Create a keypair from a `Seed`
     public static KeyPair fromSeed (Seed seed) nothrow @nogc
     {
+        scope(failure) assert(0);
         SecretKey sk;
         PublicKey pk;
+        ubyte[crypto_sign_ed25519_SEEDBYTES] data;
+
         if (crypto_sign_seed_keypair(pk[].ptr, sk[].ptr, seed[].ptr) != 0)
             assert(0);
-        return KeyPair(pk, sk, seed);
+
+        auto kp = KeyPair(pk, sk, seed);
+
+        SecretKey sk2;
+        PublicKey pk2;
+        memcpy(data.ptr, seed[].ptr, crypto_sign_ed25519_SEEDBYTES);
+        auto hmac = HMAC!SHA512(data);
+        auto digest = hmac.finish();
+
+        memcpy(sk2[].ptr, digest.ptr, crypto_sign_ed25519_SEEDBYTES);
+        if (crypto_sign_ed25519_sk_to_pk(pk2[].ptr, sk2[].ptr) != 0)
+            assert(0);
+
+        kp.secret2 = sk2;
+        kp.address2 = pk2;
+        return kp;
     }
 
     ///
