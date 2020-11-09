@@ -431,6 +431,17 @@ public class Ledger
 
         this.enroll_man.getEnrollments(data.enrolls,
             Height(this.getBlockHeight()));
+
+        Hash[] slashed_utxos = this.enroll_man.getSlashCandidates(
+            Height(this.getBlockHeight()));
+
+        if (slashed_utxos.length > 0)
+        {
+            log.warn("There are some validators that have not revealed " ~
+                "pre-images timely. The UTXOs{} will be slashed.",
+                slashed_utxos);
+        }
+
         foreach (ref Transaction tx; this.pool)
         {
             if (auto reason = tx.isInvalidReason(utxo_finder, next_height))

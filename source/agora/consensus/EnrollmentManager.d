@@ -60,6 +60,7 @@ import agora.consensus.data.PreImageInfo;
 import agora.consensus.EnrollmentPool;
 import agora.consensus.PreImage;
 import agora.consensus.validation;
+import agora.consensus.SlashPolicy;
 import agora.consensus.state.ValidatorSet;
 import agora.consensus.state.UTXOSet;
 import agora.stats.Utils;
@@ -118,6 +119,9 @@ public class EnrollmentManager
     /// Validator preimages stats
     private ValidatorPreimagesStats validator_preimages_stats;
 
+    /// HHHHHH
+    private SlashPolicy slash_policy;
+
     /***************************************************************************
 
         Constructor
@@ -148,6 +152,7 @@ public class EnrollmentManager
         this.db = new ManagedDatabase(db_path);
         this.validator_set = new ValidatorSet(this.db, params);
         this.enroll_pool = new EnrollmentPool(this.db);
+        this.slash_policy = new SlashPolicy(params);
 
 
         // create the table for enrollment data for a node itself
@@ -294,6 +299,40 @@ public class EnrollmentManager
         }
 
         return null;
+    }
+
+    /***************************************************************************
+
+        Get validators to be slashed due to missing pre-images
+
+        This finds the misbehaving validators which fail to publish their
+        pre-images regularly. A validator will be the candidate for slashing
+        if the last revealed pre-image is behind, based on the current height.
+
+        Params:
+            height = current block height
+
+        Returns:
+            UTXOs to be slashed
+
+    ***************************************************************************/
+
+    public Hash[] getSlashCandidates (Height height) @safe nothrow
+    {
+        Hash[] slashed_keys;
+        PreImageInfo[] preimages = this.validator_set.getAllPreimages();
+
+        foreach (preimage; preimages)
+        {
+            auto enrolled = this.getEnrolledHeight(preimage.enroll_key);
+            if (!this.slash_policy.checkInvalidValidator(height, enrolled,
+                preimage.distance))
+            {
+                slashed_keys ~= preimage.enroll_key;
+            }
+        }
+
+        return slashed_keys;
     }
 
     /***************************************************************************
@@ -1408,4 +1447,38 @@ unittest
     man.setEnrollmentKey(utxo_set.keys[3]);
     assert(man.getEnrollmentKey()[] == utxo_set.keys[3][]);
     assert(man.getEnrollmentKey()[] != utxo_set.keys[0][]);
+}
+
+// Test for getting the candidates to be slashed due to missing pre-images
+unittest
+{
+    import agora.common.crypto.Schnorr;
+    import agora.consensus.data.Params;
+    import agora.consensus.data.Transaction;
+    import agora.consensus.state.UTXOSet;
+
+    import std.algorithm;
+    import std.range;
+
+    scope utxo_set = new TestUTXOSet;
+    genesisSpendable()
+        .map!(txb => txb.refund(WK.Keys.A.address).sign(TxType.Freeze))
+        .each!(tx => utxo_set.put(tx));
+
+    auto params = new immutable(ConsensusParams);
+    scope enroll_man = new EnrollmentManager(":memory:", WK.Keys.A, params);
+
+   // create the first enrollment and add it as a validator
+    auto enroll = enroll_man.createEnrollment(utxo_set.keys[0]);
+    assert(enroll_man.addValidator(
+        enroll, Height(1), utxo_set.getUTXOFinder(), utxo_set.storage) is null);
+
+    // a pre-image exists as commitment of the enrollment
+    Hash[] slashed = enroll_man.getSlashCandidates(Height(1));
+    assert(slashed.length == 0);
+
+    // the next pre-image is missing
+    slashed = enroll_man.getSlashCandidates(Height(2));
+    assert(slashed.length == 1);
+    assert(slashed[0] == enroll.utxo_key);
 }
