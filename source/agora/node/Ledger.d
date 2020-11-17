@@ -160,6 +160,7 @@ public class Ledger
                         last_read_block.header.height,
                         last_read_block.header.hashFull,
                         this.utxo_set.getUTXOFinder(),
+                        this.enroll_man.getSlashChecker(),
                         active_enrollments))
                         throw new Exception(
                             "A block loaded from disk is invalid: " ~
@@ -275,7 +276,7 @@ public class Ledger
         this.tx_stats.increaseMetricBy!"agora_transactions_received_total"(1);
         const Height expected_height = Height(this.getBlockHeight() + 1);
         auto reason = tx.isInvalidReason(this.utxo_set.getUTXOFinder(),
-            expected_height);
+            this.enroll_man.getSlashChecker(), expected_height);
 
         if (reason !is null || !this.pool.add(tx))
         {
@@ -436,11 +437,12 @@ public class Ledger
             this.getBlockHeight(), this.utxo_set.getUTXOFinder());
 
         auto utxo_finder = this.utxo_set.getUTXOFinder();
+        auto slash_checker = this.enroll_man.getSlashChecker();
         foreach (ref Transaction tx; slash_txs)
         {
             log.trace("prepareNominatingSet: {}", hashMulti(tx.hashFull(),
                 cast(ulong)0));
-            if (auto reason = tx.isInvalidReason(utxo_finder, next_height))
+            if (auto reason = tx.isInvalidReason(utxo_finder, slash_checker, next_height))
                 log.trace("Rejected invalid ('{}') tx: {}", reason, tx);
             else
             {
@@ -459,7 +461,7 @@ public class Ledger
         {
             log.trace("prepareNominatingSet: {}", hashMulti(tx.hashFull(),
                 cast(ulong)0));
-            if (auto reason = tx.isInvalidReason(utxo_finder, next_height))
+            if (auto reason = tx.isInvalidReason(utxo_finder, slash_checker, next_height))
                 log.trace("Rejected invalid ('{}') tx: {}", reason, tx);
             else
                 data.tx_set ~= tx;
@@ -489,10 +491,12 @@ public class Ledger
     {
         const expect_height = Height(this.getBlockHeight() + 1);
         auto utxo_finder = this.utxo_set.getUTXOFinder();
+        auto slash_checker = this.enroll_man.getSlashChecker();
 
         foreach (const ref tx; data.tx_set)
         {
-            if (auto fail_reason = tx.isInvalidReason(utxo_finder, expect_height))
+            if (auto fail_reason = tx.isInvalidReason(utxo_finder, slash_checker,
+                expect_height))
                 return fail_reason;
         }
 
@@ -531,6 +535,7 @@ public class Ledger
         return block.isInvalidReason(this.last_block.header.height,
             this.last_block.header.hashFull,
             this.utxo_set.getUTXOFinder(),
+            this.enroll_man.getSlashChecker(),
             active_enrollments);
     }
 

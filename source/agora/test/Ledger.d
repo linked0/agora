@@ -217,7 +217,12 @@ unittest
         {
             value = UTXO(0, TxType.Payment, txs[0].outputs[0]);
             return true;
-        }, Height(0));
+        },
+        (in Hash utxo)
+        {
+            return true;
+        },
+        Height(0));
     assert(reason is null, reason);
     txs.each!(tx => node_1.putTransaction(tx));
 

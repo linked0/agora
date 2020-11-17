@@ -19,6 +19,7 @@ import agora.common.Types;
 import agora.consensus.data.Params;
 import agora.consensus.data.Transaction;
 import agora.consensus.state.UTXOSet;
+import agora.consensus.EnrollmentManager;
 
 version (unittest)
 {
@@ -41,8 +42,8 @@ version (unittest)
 *******************************************************************************/
 
 public string isInvalidReason (
-    in Transaction tx, scope UTXOFinder findUTXO, in Height height)
-    @safe nothrow
+    in Transaction tx, scope UTXOFinder findUTXO, scope SlashChcker checkSlash,
+    in Height height) @safe nothrow
 {
     import CNG = agora.consensus.data.genesis.Coinnet;
     import std.conv;
@@ -76,7 +77,11 @@ public string isInvalidReason (
         if (!findUTXO(input.utxo, utxo_value))
             return "Transaction: Input ref not in UTXO";
 
-        if (!slashing)
+        if (slashing)
+        {
+
+        }
+        else
         {
             if (!utxo_value.output.address.verify(input.signature, tx_hash[]))
                 return "Transaction: Input has invalid signature";
@@ -148,10 +153,10 @@ public string isInvalidReason (
 
 /// Ditto but returns a bool, only used in unittests
 version (unittest)
-public bool isValid (in Transaction tx, scope UTXOFinder findUTXO, in Height height)
-    @safe nothrow
+public bool isValid (in Transaction tx, scope UTXOFinder findUTXO, scope SlashChcker checkSlash,
+    in Height height) @safe nothrow
 {
-    return isInvalidReason(tx, findUTXO, height) is null;
+    return isInvalidReason(tx, findUTXO, checkSlash, height) is null;
 }
 
 /// verify transaction data
@@ -160,6 +165,8 @@ unittest
     import std.format;
 
     scope storage = new TestUTXOSet;
+    auto man = new EnrollmentManager(":memory:", KeyPair.random(),
+        new immutable(ConsensusParams)());
     KeyPair[] key_pairs = [KeyPair.random, KeyPair.random, KeyPair.random, KeyPair.random];
 
     // Creates the first transaction.
@@ -183,22 +190,22 @@ unittest
     secondTx.inputs[0].signature = key_pairs[0].secret.sign(hashFull(secondTx)[]);
 
     // It is validated. (the sum of `Output` < the sum of `Input`)
-    assert(secondTx.isValid(storage.getUTXOFinder(), Height(0)),
-           format("Transaction data is not validated %s", secondTx));
+    assert(secondTx.isValid(storage.getUTXOFinder(), man.getSlashChecker(),
+            Height(0)), format("Transaction data is not validated %s", secondTx));
 
     secondTx.outputs ~= Output(Amount(50), key_pairs[2].address);
     secondTx.inputs[0].signature = key_pairs[0].secret.sign(hashFull(secondTx)[]);
 
     // It is validated. (the sum of `Output` == the sum of `Input`)
-    assert(secondTx.isValid(storage.getUTXOFinder(), Height(0)),
-           format("Transaction data is not validated %s", secondTx));
+    assert(secondTx.isValid(storage.getUTXOFinder(), man.getSlashChecker(),
+            Height(0)), format("Transaction data is not validated %s", secondTx));
 
     secondTx.outputs ~= Output(Amount(50), key_pairs[3].address);
     secondTx.inputs[0].signature = key_pairs[0].secret.sign(hashFull(secondTx)[]);
 
     // It isn't validated. (the sum of `Output` > the sum of `Input`)
-    assert(!secondTx.isValid(storage.getUTXOFinder(), Height(0)),
-           format("Transaction data is not validated %s", secondTx));
+    assert(!secondTx.isValid(storage.getUTXOFinder(), man.getSlashChecker(),
+            Height(0)), format("Transaction data is not validated %s", secondTx));
 }
 
 /// negative output amounts disallowed
@@ -209,6 +216,8 @@ unittest
     Hash tx_1_hash = hashFull(tx_1);
 
     scope storage = new TestUTXOSet;
+    auto man = new EnrollmentManager(":memory:", KeyPair.random(),
+        new immutable(ConsensusParams)());
     storage.put(tx_1);
 
     // Creates the second transaction.
@@ -222,7 +231,7 @@ unittest
 
     tx_2.inputs[0].signature = key_pairs[0].secret.sign(hashFull(tx_2)[]);
 
-    assert(!tx_2.isValid(storage.getUTXOFinder(), Height(0)));
+    assert(!tx_2.isValid(storage.getUTXOFinder(), man.getSlashChecker(), Height(0)));
 
     // Creates the third transaction.
     // Reject a transaction whose output value is zero
@@ -235,7 +244,7 @@ unittest
 
     tx_3.inputs[0].signature = key_pairs[0].secret.sign(hashFull(tx_3)[]);
 
-    assert(!tx_3.isValid(storage.getUTXOFinder(), Height(0)));
+    assert(!tx_3.isValid(storage.getUTXOFinder(), man.getSlashChecker(), Height(0)));
 }
 
 /// This creates a new transaction and signs it as a publickey
@@ -245,6 +254,8 @@ unittest
     import std.format;
 
     scope storage = new TestUTXOSet;
+    auto man = new EnrollmentManager(":memory:", KeyPair.random(),
+        new immutable(ConsensusParams)());
 
     immutable(KeyPair)[] key_pairs;
     key_pairs ~= KeyPair.random();
@@ -272,8 +283,8 @@ unittest
     tx1.inputs[0].signature = key_pairs[0].secret.sign(tx1Hash[]);
     storage.put(tx1);
 
-    assert(tx1.isValid(storage.getUTXOFinder(), Height(0)),
-           format("Transaction signature is not validated %s", tx1));
+    assert(tx1.isValid(storage.getUTXOFinder(), man.getSlashChecker(),
+            Height(0)), format("Transaction signature is not validated %s", tx1));
 
     Transaction tx2 = Transaction(
         TxType.Payment,
@@ -290,14 +301,16 @@ unittest
     tx2.inputs[0].signature = key_pairs[2].secret.sign(tx2Hash[]);
     storage.put(tx2);
     // Signature verification must be error
-    assert(!tx2.isValid(storage.getUTXOFinder(), Height(0)),
-           format("Transaction signature is not validated %s", tx2));
+    assert(!tx2.isValid(storage.getUTXOFinder(), man.getSlashChecker(),
+            Height(0)), format("Transaction signature is not validated %s", tx2));
 }
 
 /// verify transactions associated with freezing
 unittest
 {
     scope storage = new TestUTXOSet();
+    auto man = new EnrollmentManager(":memory:", KeyPair.random(),
+        new immutable(ConsensusParams)());
     KeyPair[] key_pairs = [KeyPair.random, KeyPair.random, KeyPair.random, KeyPair.random];
 
     Transaction secondTx;
@@ -331,7 +344,8 @@ unittest
         secondTx.inputs[0].signature = key_pairs[0].secret.sign(hashFull(secondTx)[]);
 
         // Second Transaction is valid.
-        assert(secondTx.isValid(storage.getUTXOFinder(), Height(0)));
+        assert(secondTx.isValid(storage.getUTXOFinder(), man.getSlashChecker(),
+                Height(0)));
     }
 
     // When the privious transaction type is `Freeze`, second transaction type is `Freeze`.
@@ -361,7 +375,8 @@ unittest
         secondTx.inputs[0].signature = key_pairs[0].secret.sign(hashFull(secondTx)[]);
 
         // Second Transaction is invalid.
-        assert(!secondTx.isValid(storage.getUTXOFinder(), Height(0)));
+        assert(!secondTx.isValid(storage.getUTXOFinder(), man.getSlashChecker(),
+                Height(0)));
     }
 
     // When the privious transaction with not enough amount at freezing.
@@ -391,7 +406,8 @@ unittest
         secondTx.inputs[0].signature = key_pairs[0].secret.sign(hashFull(secondTx)[]);
 
         // Second Transaction is invalid.
-        assert(!secondTx.isValid(storage.getUTXOFinder(), Height(0)));
+        assert(!secondTx.isValid(storage.getUTXOFinder(), man.getSlashChecker(),
+                Height(0)));
     }
 
     // When the privious transaction with too many amount at freezings.
@@ -420,7 +436,8 @@ unittest
         secondTx.inputs[0].signature = key_pairs[0].secret.sign(hashFull(secondTx)[]);
 
         // Second Transaction is valid.
-        assert(secondTx.isValid(storage.getUTXOFinder(), Height(0)));
+        assert(secondTx.isValid(storage.getUTXOFinder(), man.getSlashChecker(),
+                Height(0)));
     }
 }
 
@@ -441,6 +458,8 @@ unittest
 unittest
 {
     scope storage = new TestUTXOSet;
+    auto man = new EnrollmentManager(":memory:", KeyPair.random(),
+        new immutable(ConsensusParams)());
     KeyPair[] key_pairs = [KeyPair.random, KeyPair.random, KeyPair.random, KeyPair.random];
 
     Height block_height;
@@ -492,7 +511,8 @@ unittest
         secondTx.inputs[0].signature = key_pairs[0].secret.sign(hashFull(secondTx)[]);
 
         // Second Transaction is VALID.
-        assert(secondTx.isValid(storage.getUTXOFinder(), block_height));
+        assert(secondTx.isValid(storage.getUTXOFinder(), man.getSlashChecker(),
+                block_height));
 
         // Save to UTXOSet
         secondHash = hashFull(secondTx);
@@ -523,7 +543,8 @@ unittest
         thirdTx.inputs[0].signature = key_pairs[1].secret.sign(hashFull(thirdTx)[]);
 
         // Third Transaction is VALID.
-        assert(thirdTx.isValid(storage.getUTXOFinder(), block_height));
+        assert(thirdTx.isValid(storage.getUTXOFinder(), man.getSlashChecker(),
+                block_height));
 
         // Save to UTXOSet
         thirdHash = hashFull(thirdTx);
@@ -554,7 +575,8 @@ unittest
         fourthTx.inputs[0].signature = key_pairs[2].secret.sign(hashFull(fourthTx)[]);
 
         // Third Transaction is INVALID.
-        assert(!fourthTx.isValid(storage.getUTXOFinder(), block_height));
+        assert(!fourthTx.isValid(storage.getUTXOFinder(), man.getSlashChecker(),
+                block_height));
     }
 
     // Creates the fifth payment transaction
@@ -572,7 +594,8 @@ unittest
         fifthTx.inputs[0].signature = key_pairs[2].secret.sign(hashFull(fourthTx)[]);
 
         // Third Transaction is VALID.
-        assert(fifthTx.isValid(storage.getUTXOFinder(), block_height));
+        assert(fifthTx.isValid(storage.getUTXOFinder(), man.getSlashChecker(),
+                block_height));
 
         // Save to UTXOSet
         fifthHash = hashFull(fifthTx);
@@ -597,6 +620,8 @@ unittest
     import std.algorithm.searching;
 
     scope storage = new TestUTXOSet;
+    auto man = new EnrollmentManager(":memory:", KeyPair.random(),
+        new immutable(ConsensusParams)());
     KeyPair key_pair = KeyPair.random;
 
     // create a transaction having no input
@@ -608,7 +633,8 @@ unittest
     storage.put(oneTx);
 
     // test for Payment transaction having no input
-    assert(canFind(toLower(oneTx.isInvalidReason(storage.getUTXOFinder(), Height(0))), "no input"),
+    assert(canFind(toLower(oneTx.isInvalidReason(storage.getUTXOFinder(),
+        man.getSlashChecker(), Height(0))), "no input"),
         format("Tx having no input should not pass validation. tx: %s", oneTx));
 
     // create a transaction
@@ -625,7 +651,8 @@ unittest
     storage.put(secondTx);
 
     // test for Freeze transaction having no output
-    assert(canFind(toLower(secondTx.isInvalidReason(storage.getUTXOFinder(), Height(0))), "no output"),
+    assert(canFind(toLower(secondTx.isInvalidReason(storage.getUTXOFinder(),
+        man.getSlashChecker(), Height(0))), "no output"),
         format("Tx having no output should not pass validation. tx: %s", secondTx));
 }
 
@@ -634,6 +661,8 @@ unittest
 {
     import std.format;
     scope storage = new TestUTXOSet;
+    auto man = new EnrollmentManager(":memory:", KeyPair.random(),
+        new immutable(ConsensusParams)());
     KeyPair[] key_pairs = [KeyPair.random, KeyPair.random];
 
     // create the first transaction.
@@ -666,7 +695,7 @@ unittest
     thirdTx.inputs[1].signature = key_pairs[0].secret.sign(thirdHash[]);
 
     // test for transaction having combined inputs
-    assert(!thirdTx.isValid(storage.getUTXOFinder(), Height(0)),
+    assert(!thirdTx.isValid(storage.getUTXOFinder(), man.getSlashChecker(), Height(0)),
         format("Tx having combined inputs should not pass validation. tx: %s", thirdTx));
 }
 
@@ -688,7 +717,7 @@ unittest
     storage[firstHash] = firstTx;
 
     // test for unknown transaction type
-    assert(!firstTx.isValid(null, Height(0)),
+    assert(!firstTx.isValid(null, null, Height(0)),
         format("Tx having unknown type should not pass validation. tx: %s", firstTx));
 }
 
@@ -697,6 +726,8 @@ unittest
 {
     import std.format;
     scope storage = new TestUTXOSet();
+    auto man = new EnrollmentManager(":memory:", KeyPair.random(),
+        new immutable(ConsensusParams)());
     KeyPair[] key_pairs = [KeyPair.random, KeyPair.random];
 
     // create the first transaction
@@ -729,7 +760,7 @@ unittest
     thirdTx.inputs[1].signature = key_pairs[0].secret.sign(thirdHash[]);
 
     // test for input overflow in Payment transaction
-    assert(!thirdTx.isValid(&storage.peekUTXO, Height(0)),
+    assert(!thirdTx.isValid(&storage.peekUTXO, man.getSlashChecker(), Height(0)),
         format("Tx having input overflow should not pass validation. tx: %s", thirdTx));
 
     // create the fourth transaction
@@ -744,7 +775,7 @@ unittest
     fourthTx.inputs[1].signature = key_pairs[0].secret.sign(fourthHash[]);
 
     // test for input overflow in Freeze transaction
-    assert(!fourthTx.isValid(&storage.peekUTXO, Height(0)),
+    assert(!fourthTx.isValid(&storage.peekUTXO, man.getSlashChecker(), Height(0)),
         format("Tx having input overflow should not pass validation. tx: %s", fourthTx));
 }
 
@@ -753,6 +784,8 @@ unittest
 {
     import std.format;
     scope storage = new TestUTXOSet();
+    auto man = new EnrollmentManager(":memory:", KeyPair.random(),
+        new immutable(ConsensusParams)());
     KeyPair[] key_pairs = [KeyPair.random, KeyPair.random];
 
     // create the first transaction
@@ -786,6 +819,6 @@ unittest
     thirdTx.inputs[1].signature = key_pairs[0].secret.sign(thirdHash[]);
 
     // test for output overflow in Payment transaction
-    assert(!thirdTx.isValid(&storage.peekUTXO, Height(0)),
+    assert(!thirdTx.isValid(&storage.peekUTXO, man.getSlashChecker(), Height(0)),
         format("Tx having output overflow should not pass validation. tx: %s", thirdTx));
 }

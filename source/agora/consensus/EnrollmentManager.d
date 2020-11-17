@@ -80,6 +80,9 @@ import std.string;
 
 mixin AddLogger!();
 
+/// HHHHHH
+public alias SlashChcker = bool delegate (in Hash utxo) nothrow @safe;
+
 /*******************************************************************************
 
     Handle enrollment data and manage the validators set
@@ -331,6 +334,34 @@ public class EnrollmentManager
             }
         }
         return this.slash_policy.createSlashingTransactions(slashed_keys, finder);
+    }
+
+    /***************************************************************************
+
+        HHHHHH
+
+        Returns:
+            HHHHHH
+
+    ***************************************************************************/
+
+    public SlashChcker getSlashChecker () nothrow @trusted
+    {
+        return &this.checkSlash;
+    }
+
+    /***************************************************************************
+
+        HHHHHH
+
+        Returns:
+            HHHHHH
+
+    ***************************************************************************/
+
+    public bool checkSlash (in Hash utxo) nothrow @safe
+    {
+        return true;
     }
 
     /***************************************************************************
