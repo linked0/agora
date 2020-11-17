@@ -3,6 +3,8 @@
     Manages the slashing policy for the misbehaving validators that do not
     publish pre-images timely.
 
+    HHHHHH Manages ...
+
     This class currently has two responsibilities:
     - It determines when the misbehaving validators will be slashed -- in other
         words, how many times of missing pre-images it will allow.
@@ -32,6 +34,7 @@ import agora.common.Types;
 import agora.consensus.data.Enrollment;
 import agora.consensus.data.Params;
 import agora.consensus.data.PreImageInfo;
+import agora.consensus.data.Transaction;
 import agora.consensus.state.UTXODB;
 import agora.utils.Log;
 version (unittest) import agora.utils.Test;
@@ -89,5 +92,49 @@ public class SlashPolicy
             return true;
         else
             return false;
+    }
+
+    /***************************************************************************
+
+        HHHHHH
+
+        Params:
+            height = current block height
+            finder = the delegate to find UTXOs with
+
+        Returns:
+            HHHHHH
+
+    ***************************************************************************/
+
+    public Transaction[] createSlashingTransactions (Hash[] slashed_utxos,
+        scope UTXOFinder finder)@safe
+    {
+        Transaction[] txs;
+        if (slashed_utxos.length > 0)
+        {
+            log.warn("There are some validators that have not revealed " ~
+                "pre-images timely. UTXOs{} will be slashed", slashed_utxos);
+        }
+
+        foreach (utxo; slashed_utxos)
+        {
+            UTXO utxo_value;
+            if (finder(utxo, utxo_value))
+            {
+                auto refund_value = Amount(utxo_value.output.value);
+                refund_value.sub(this.penalty_amount);
+                txs ~= Transaction(TxType.Payment,
+                    [Input(utxo)],
+                    [Output(this.penalty_amount, this.penalty_address),
+                        Output(refund_value, utxo_value.output.address)]);
+            }
+            else
+            {
+                log.fatal("No UTXO value for a uxto hash {}", utxo);
+            }
+        }
+
+        return txs;
     }
 }

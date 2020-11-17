@@ -16,6 +16,7 @@ module agora.consensus.validation.Transaction;
 import agora.common.Amount;
 import agora.common.Hash;
 import agora.common.Types;
+import agora.consensus.data.Params;
 import agora.consensus.data.Transaction;
 import agora.consensus.state.UTXOSet;
 
@@ -43,6 +44,7 @@ public string isInvalidReason (
     in Transaction tx, scope UTXOFinder findUTXO, in Height height)
     @safe nothrow
 {
+    import CNG = agora.consensus.data.genesis.Coinnet;
     import std.conv;
 
     if (tx.inputs.length == 0)
@@ -62,6 +64,10 @@ public string isInvalidReason (
             return "Transaction: Value of output is 0";
     }
 
+    auto slashing = false;
+    if (tx.outputs[0].address == CNG.CommonsBudgetAddress)
+        slashing = true;
+
     const tx_hash = hashFull(tx);
 
     string isInvalidInput (const ref Input input, ref UTXO utxo_value,
@@ -70,8 +76,11 @@ public string isInvalidReason (
         if (!findUTXO(input.utxo, utxo_value))
             return "Transaction: Input ref not in UTXO";
 
-        if (!utxo_value.output.address.verify(input.signature, tx_hash[]))
-            return "Transaction: Input has invalid signature";
+        if (!slashing)
+        {
+            if (!utxo_value.output.address.verify(input.signature, tx_hash[]))
+                return "Transaction: Input has invalid signature";
+        }
 
         if (!sum_unspent.add(utxo_value.output.value))
             return "Transaction: Input overflow";
@@ -126,11 +135,14 @@ public string isInvalidReason (
     else
         return "Transaction: Invalid transaction type";
 
+    import std.format;
+    scope(failure) assert(0);
     Amount new_unspent;
+    Amount sum_unspent2 = sum_unspent;
     if (!tx.getSumOutput(new_unspent))
         return "Transaction: Referenced Output(s) overflow";
     if (!sum_unspent.sub(new_unspent))
-        return "Transaction: Output(s) are higher than Input(s)";
+        return format!"Transaction: Output(%s) are higher than Input(%s)"(new_unspent, sum_unspent2);
     return null;
 }
 

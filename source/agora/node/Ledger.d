@@ -427,23 +427,38 @@ public class Ledger
     {
         data = ConsensusData.init;
         const next_height = Height(this.getBlockHeight() + 1);
-        auto utxo_finder = this.utxo_set.getUTXOFinder();
 
         this.enroll_man.getEnrollments(data.enrolls,
             Height(this.getBlockHeight()));
 
-        Hash[] slashed_utxos = this.enroll_man.getSlashCandidates(
-            Height(this.getBlockHeight()));
+        // add slashing transactions for the misbehaving validators
+        Transaction[] slash_txs = this.enroll_man.createSlashingTransactions(
+            this.getBlockHeight(), this.utxo_set.getUTXOFinder());
 
-        if (slashed_utxos.length > 0)
+        auto utxo_finder = this.utxo_set.getUTXOFinder();
+        foreach (ref Transaction tx; slash_txs)
         {
-            log.warn("There are some validators that have not revealed " ~
-                "pre-images timely. The UTXOs{} will be slashed.",
-                slashed_utxos);
+            log.trace("prepareNominatingSet: {}", hashMulti(tx.hashFull(),
+                cast(ulong)0));
+            if (auto reason = tx.isInvalidReason(utxo_finder, next_height))
+                log.trace("Rejected invalid ('{}') tx: {}", reason, tx);
+            else
+            {
+                data.tx_set ~= tx;
+            }
+
+            if (data.tx_set.length >= max_txs)
+            {
+                data.tx_set.sort();
+                return;
+            }
         }
+        log.trace("data.tx_set.count - 1: {}", data.tx_set.length);
 
         foreach (ref Transaction tx; this.pool)
         {
+            log.trace("prepareNominatingSet: {}", hashMulti(tx.hashFull(),
+                cast(ulong)0));
             if (auto reason = tx.isInvalidReason(utxo_finder, next_height))
                 log.trace("Rejected invalid ('{}') tx: {}", reason, tx);
             else
@@ -455,6 +470,7 @@ public class Ledger
                 return;
             }
         }
+        log.trace("data.tx_set.count - 2: {}", data.tx_set.length);
     }
 
     /***************************************************************************
@@ -616,12 +632,13 @@ public class Ledger
 /// 8 transactions - hence the use of `TxsInTestBlock` appearing everywhere.
 version (unittest)
 {
+    private enum MaxTransactionsPerBlock = 1000;
+
     /// simulate block creation as if a nomination and externalize round completed
     private void forceCreateBlock (Ledger ledger)
     {
         ConsensusData data;
-        ledger.prepareNominatingSet(data, Block.TxsInTestBlock);
-        assert(data.tx_set.length == Block.TxsInTestBlock);
+        ledger.prepareNominatingSet(data, MaxTransactionsPerBlock);
         assert(ledger.onExternalized(data));
     }
 
@@ -651,6 +668,8 @@ version (unittest)
 ///
 unittest
 {
+    import std.stdio;
+
     scope ledger = new TestLedger(WK.Keys.NODE2);
     assert(ledger.getBlockHeight() == 0);
 
@@ -1316,4 +1335,44 @@ unittest
     scope ledger = new TestLedger(WK.Keys.A, [CoinGenesis], good_params);
     // Neither will the default
     scope other_ledger = new TestLedger(WK.Keys.A, [CoinGenesis]);
+}
+
+/// HHHHHH
+unittest
+{
+    import std.stdio;
+    import agora.utils.PrettyPrinter;
+
+    const new_validators = 2;
+    auto params = new immutable(ConsensusParams)(10);
+    scope Ledger ledger = new TestLedger(WK.Keys.A, null, params);
+
+    // Block 1
+    auto spendable = genesisSpendable().array;
+    auto txs = spendable[0 .. new_validators].enumerate()
+        .map!(tup => tup.value.refund(WK.Keys[tup.index].address)
+            .sign(TxType.Freeze))
+        .array();
+    txs ~= spendable[new_validators .. 7].enumerate()
+        .map!(tup => tup.value.refund(WK.Keys.A.address).sign()).array;
+    txs ~= spendable[7].split(WK.Keys.A.address.repeat(8)).sign();
+    txs.each!(tx => assert(ledger.acceptTransaction(tx)));
+    ledger.forceCreateBlock();
+    assert(ledger.getBlockHeight() == 1);
+
+    // Block 2
+    txs = txs[$ - 1].outputs.length.iota
+        .map!(idx => TxBuilder(txs[$ - 1], cast(uint)idx).sign())
+        .array;
+    txs.each!(tx => assert(ledger.acceptTransaction(tx)));
+
+    int slash_count = 0;
+    ConsensusData data;
+    ledger.prepareNominatingSet(data, MaxTransactionsPerBlock);
+    foreach (idx, tx; data.tx_set)
+    {
+        if (tx.outputs[0].address == params.CommonsBudgetAddress)
+            slash_count++;
+    }
+    assert(slash_count == 6);
 }

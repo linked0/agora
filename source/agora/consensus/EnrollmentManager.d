@@ -57,6 +57,7 @@ import agora.consensus.data.Block;
 import agora.consensus.data.Enrollment;
 import agora.consensus.data.Params;
 import agora.consensus.data.PreImageInfo;
+import agora.consensus.data.Transaction;
 import agora.consensus.EnrollmentPool;
 import agora.consensus.PreImage;
 import agora.consensus.validation;
@@ -303,21 +304,19 @@ public class EnrollmentManager
 
     /***************************************************************************
 
-        Get validators to be slashed due to missing pre-images
-
-        This finds the misbehaving validators which fail to publish their
-        pre-images regularly. A validator will be the candidate for slashing
-        if the last revealed pre-image is behind, based on the current height.
+        HHHHHH
 
         Params:
             height = current block height
+            finder = the delegate to find UTXOs with
 
         Returns:
-            UTXOs to be slashed
+            HHHHHH
 
     ***************************************************************************/
 
-    public Hash[] getSlashCandidates (Height height) @safe nothrow
+    public Transaction[] createSlashingTransactions (Height height,
+        scope UTXOFinder finder)@safe
     {
         Hash[] slashed_keys;
         PreImageInfo[] preimages = this.validator_set.getAllPreimages();
@@ -331,8 +330,7 @@ public class EnrollmentManager
                 slashed_keys ~= preimage.enroll_key;
             }
         }
-
-        return slashed_keys;
+        return this.slash_policy.createSlashingTransactions(slashed_keys, finder);
     }
 
     /***************************************************************************
@@ -1452,12 +1450,15 @@ unittest
 // Test for getting the candidates to be slashed due to missing pre-images
 unittest
 {
+    import agora.common.Amount;
     import agora.common.crypto.Schnorr;
     import agora.consensus.data.Params;
     import agora.consensus.data.Transaction;
+    import agora.consensus.SlashPolicy;
     import agora.consensus.state.UTXOSet;
 
     import std.algorithm;
+    import std.format;
     import std.range;
 
     scope utxo_set = new TestUTXOSet;
@@ -1473,12 +1474,19 @@ unittest
     assert(enroll_man.addValidator(
         enroll, Height(1), utxo_set.getUTXOFinder(), utxo_set.storage) is null);
 
-    // a pre-image exists as commitment of the enrollment
-    Hash[] slashed = enroll_man.getSlashCandidates(Height(1));
-    assert(slashed.length == 0);
+    // make the slashing transaction
+    Transaction[] txs = enroll_man.createSlashingTransactions(Height(2),
+        utxo_set.getUTXOFinder());
 
-    // the next pre-image is missing
-    slashed = enroll_man.getSlashCandidates(Height(2));
-    assert(slashed.length == 1);
-    assert(slashed[0] == enroll.utxo_key);
+    SlashPolicy slash_policy = enroll_man.slash_policy;
+    Transaction[] expected_txs;
+    expected_txs ~= Transaction(
+        TxType.Payment,
+        [Input(enroll.utxo_key)],
+        [Output(slash_policy.penalty_amount, slash_policy.penalty_address),
+            Output(Amount(60_990_000L * 10_000_000L), WK.Keys.A.address)]
+    );
+
+    assert(txs == expected_txs, format!"\nReturned txs: %s\nExpected txs: %s"
+        (txs, expected_txs));
 }
