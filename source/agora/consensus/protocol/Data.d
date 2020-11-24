@@ -13,6 +13,7 @@
 
 module agora.consensus.protocol.Data;
 
+import agora.common.Types;
 import agora.consensus.data.Enrollment;
 import agora.consensus.data.Transaction;
 
@@ -24,6 +25,13 @@ public struct ConsensusData
 
     /// The enrollments that are being nominated / voted on
     public Enrollment[] enrolls;
+
+    /// Hash of the merkle root of the preimages for this height
+    public Hash preimage_root;
+
+    /// List of indices to the validator UTXO set which have not
+    /// revealed the preimage
+    public uint[] missing_validators;
 }
 
 /// ConsensusData type testSymmetry check
@@ -50,11 +58,16 @@ unittest
         cycle_length: 1008,
         enroll_sig: sig,
     };
+    const preimage_root = Hash("0x47c993d409aa7d77651ecaa5a5d29e47a7aee609c7" ~
+                               "cb376f5f8ff2a868c738233a2df5ba11d635c8576a47" ~
+                               "3864fc1c8fd1469f4be80b853764da53f6a5b41661");
 
     const(ConsensusData) data =
     {
         tx_set:  GenesisBlock.txs,
         enrolls: [ record, record, ],
+        preimage_root : preimage_root,
+        missing_validators : [ 1, 3, 5 ],
     };
 
     testSymmetry(data);
