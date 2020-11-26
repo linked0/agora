@@ -15,6 +15,7 @@ module agora.consensus.protocol.Data;
 
 import agora.common.Types;
 import agora.consensus.data.Enrollment;
+import agora.consensus.data.PreImageInfo; // HHHHHH
 import agora.consensus.data.Transaction;
 
 /// Consensus data which is nominated & voted on
@@ -32,9 +33,16 @@ public struct ConsensusData
     /// List of indices to the validator UTXO set which have not
     /// revealed the preimage
     public uint[] missing_validators;
+
+    public Hash[] utxos;
+
+    public PreImageInfo[] preimages;
+
+    public string info;
 }
 
 /// ConsensusData type testSymmetry check
+version (none)
 unittest
 {
     import agora.common.Serializer;

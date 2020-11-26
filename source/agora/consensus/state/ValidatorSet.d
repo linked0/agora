@@ -520,10 +520,18 @@ public class ValidatorSet
                 ushort distance = row.peek!ushort(2);
 
                 // go back to the desired preimage of a previous height
-                while (enrolled_height + distance > height)
+                auto expect_height = (height.value == 0) ? 0 : height.value - 1;
+                while (enrolled_height + distance > expect_height)
                 {
                     preimage = hashFull(preimage);
                     distance--;
+
+                    import std.stdio;
+                    import std.format;
+                    scope(failure) assert(0);
+                    if (distance > 65400 && distance < 65536)
+                        writeln(format!"distance: %s, enrolled_height: %s, expect_height: %s"
+                            (distance, enrolled_height, expect_height));
                 }
 
                 return PreImageInfo(enroll_key, preimage, distance);

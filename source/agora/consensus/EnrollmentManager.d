@@ -93,7 +93,7 @@ public class EnrollmentManager
     private Pair key_pair;
 
     /// Key used for enrollment which is actually an UTXO hash
-    private Hash enroll_key;
+    protected Hash enroll_key;
 
     /// The period for revealing a preimage
     /// It is an hour interval if a block is made in every 10 minutes
@@ -101,7 +101,7 @@ public class EnrollmentManager
 
     /// Validator set managing validators' information such as Enrollment object
     /// enrolled height, and preimages.
-    private ValidatorSet validator_set;
+    public ValidatorSet validator_set;
 
     /// Enrollment pool managing enrollments waiting to be a validator
     private EnrollmentPool enroll_pool;
@@ -110,7 +110,7 @@ public class EnrollmentManager
     private PreImageCycle cycle;
 
     /// Parameters for consensus-critical constants
-    private immutable(ConsensusParams) params;
+    protected immutable(ConsensusParams) params;
 
     /// Validator count stats
     private ValidatorCountStats validator_count_stats;
@@ -570,7 +570,7 @@ public class EnrollmentManager
     public Hash getRandomSeed (in Hash[] keys, in Height height) @safe nothrow
     in
     {
-        assert(keys.length != 0);
+        // assert(keys.length != 0);
         assert(keys.isStrictlyMonotonic!((a, b) => a < b));
     }
     do

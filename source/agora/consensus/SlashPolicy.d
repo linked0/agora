@@ -41,7 +41,10 @@ import agora.consensus.state.UTXODB;
 import agora.utils.Log;
 version (unittest) import agora.utils.Test;
 
+import std.algorithm;
 import std.exception;
+import std.format;
+import std.range;
 
 mixin AddLogger!();
 
@@ -120,7 +123,7 @@ public class SlashPolicy
 
     ***************************************************************************/
 
-    public Hash getPreimageRoot (in Height height) @safe nothrow
+    public Hash getPreimageRoot (in Height height, ref ConsensusData data) @safe nothrow
     {
         Hash[] keys;
         if (!this.enroll_man.getEnrolledUTXOs(keys) || keys.length == 0)
@@ -133,10 +136,62 @@ public class SlashPolicy
         foreach (key; keys)
         {
             if (checkValidValidator(height, key))
+            {
                 valid_keys ~= key;
+                // data.preimages ~= this.enroll_man.validator_set.getPreimageAt(
+                //         key, height);
+            }
         }
 
+        data.utxos = valid_keys;
+
         return this.enroll_man.getRandomSeed(valid_keys, height);
+    }
+
+    /***************************************************************************
+
+        HHHHHH
+
+        Params:
+            HHHHHH
+
+        Returns:
+            HHHHHH
+
+    ***************************************************************************/
+
+    public string isInvalidPreimageRootReason (Height height,
+        const ref Hash preimage_root, const ref uint[] missing_validators)
+        @safe
+    {
+        Hash[] keys;
+        if (!this.enroll_man.getEnrolledUTXOs(keys) || keys.length == 0)
+        {
+            return "Could not retrieve enrollments / no enrollments found";
+            assert(0);
+        }
+
+        Hash[] valid_keys;
+        PreImageInfo[] local_preimags;
+        foreach (idx, key; keys)
+        {
+            if (missing_validators.find(idx).empty())
+            {
+                valid_keys ~= key;
+                // local_preimags ~= this.enroll_man.validator_set.getPreimageAt(
+                //         key, height);
+            }
+        }
+
+        auto local_root = this.enroll_man.getRandomSeed(valid_keys, height);
+
+        if (local_root == preimage_root)
+            return null;
+        else
+            return format!
+                "The preimage_root do not match with local preimage root : %s,
+height: %s, \nlocal_preimages: %s"
+                (local_root, height, local_preimags);
     }
 
     /***************************************************************************
@@ -151,13 +206,22 @@ public class SlashPolicy
     private bool checkValidValidator (in Height height, in Hash utxo_key)
         @safe nothrow
     {
+        scope(failure) assert(0);
         auto preimage = this.enroll_man.getValidatorPreimage(utxo_key);
         auto enrolled = this.enroll_man.getEnrolledHeight(preimage.enroll_key);
+
         assert(height >= enrolled);
         if (preimage.distance >= cast(ushort)(height - enrolled - 1))
             return true;
         else
             return false;
+    }
+
+    import agora.consensus.protocol.Data;
+    public void getPreimageData(Height next_height, ref ConsensusData data)
+        @safe
+    {
+        data.info = "hello";
     }
 }
 
@@ -219,11 +283,8 @@ unittest
             &utxo_set.peekUTXO, self_utxos) is null);
     assert(enroll_man.validatorCount() == 8);
 
-    // a preimage exists as commitment of the enrollment
+    // create slashing manager
     scope slash_man = new SlashPolicy(enroll_man, params);
-    uint[] missing_validators;
-    slash_man.getMissingValidators(Height(2), missing_validators);
-    assert(missing_validators.length == 0);
 
     // get all the validators and find index of the first and second validastors
     uint first_validator;
@@ -237,7 +298,7 @@ unittest
             break;
         }
     foreach (idx, utxo; utxos)
-        if (utxo == enrollments[0].utxo_key)
+        if (utxo == enrollments[1].utxo_key)
         {
             second_validator = cast(uint)idx;
             break;
@@ -266,13 +327,16 @@ unittest
     assert(preimage_2 == gotten_image);
 
     // check missing preimage
+    uint[] missing_validators;
     slash_man.getMissingValidators(Height(3), missing_validators);
     assert(missing_validators.length == 6);
     assert(missing_validators.find(first_validator).empty());
     assert(missing_validators.find(second_validator).empty());
 
     // get and check preimage root
-    Hash preimage_root = slash_man.getPreimageRoot(Height(3));
+    import agora.consensus.protocol.Data; // HHHHHH
+    ConsensusData data; // HHHHHH
+    Hash preimage_root = slash_man.getPreimageRoot(Height(3), data);
     assert(preimage_root ==
         hashMulti(hashMulti(Hash.init, preimage_1), preimage_2));
 }

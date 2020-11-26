@@ -280,6 +280,14 @@ extern(D):
             return false;
         }
 
+        // check whether the pre-image related data is valid
+        if (auto msg = this.ledger.validatePreImageData(data))
+        {
+            log.fatal("tryNominate(): Invalid preimage data: {}. Data: {}",
+                    msg, data);
+            return false;
+        }
+
         return true;
     }
 
@@ -535,6 +543,9 @@ extern(D):
         const cur_time = this.clock.networkTime();
         const exp_time = this.getExpectedBlockTime(Height(slot_idx));
 
+        scope(failure) assert(0);
+        import std.stdio;
+
         try
         {
             auto data = deserializeFull!ConsensusData(value[]);
@@ -544,6 +555,16 @@ extern(D):
                     fail_reason, data);
                 return ValidationLevel.kInvalidValue;
             }
+
+//             if (auto fail_reason = this.ledger.validatePreImageData(data))
+//             {
+//                 writeln(format!"\nMismatching pre-images missing_validator: %s,
+// preimage_root: %s, preimages: %s, reason: %s"
+//                     (data.missing_validators, data.preimage_root,
+//                     data.preimages,
+//                     fail_reason));
+//                 return ValidationLevel.kInvalidValue;
+//             }
         }
         catch (Exception ex)
         {
