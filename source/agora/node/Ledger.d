@@ -37,6 +37,7 @@ import agora.consensus.data.Params;
 import agora.consensus.data.Transaction;
 import agora.consensus.state.UTXODB;
 import agora.consensus.EnrollmentManager;
+import agora.consensus.SlashPolicy;
 import agora.consensus.validation;
 import agora.node.BlockStorage;
 import agora.node.Fee;
@@ -77,6 +78,9 @@ public class Ledger
 
     /// Enrollment manager
     private EnrollmentManager enroll_man;
+
+    /// Slashing policy manager
+    private SlashPolicy slash_man;
 
     /// If not null call this delegate
     /// A block was externalized
@@ -120,6 +124,7 @@ public class Ledger
         this.utxo_set = utxo_set;
         this.storage = storage;
         this.enroll_man = enroll_man;
+        this.slash_man = new SlashPolicy(this.enroll_man, params);
         this.pool = pool;
         this.onAcceptedBlock = onAcceptedBlock;
         this.payload_checker = payload_checker;
@@ -380,6 +385,7 @@ public class Ledger
     protected void updateUTXOSet (const ref Block block) @safe
     {
         const height = block.header.height;
+
         // add the new UTXOs
         block.txs.each!(tx => this.utxo_set.updateUTXOCache(tx, height));
 
@@ -439,6 +445,13 @@ public class Ledger
 
         this.enroll_man.getEnrollments(data.enrolls,
             Height(this.getBlockHeight()));
+
+        // get information about validators not revealing a preimage timely
+        data.preimage_root = this.slash_man.getPreimageRoot(
+            this.getBlockHeight());
+        this.slash_man.getMissingValidators(data.missing_validators,
+            this.getBlockHeight());
+
         foreach (ref Transaction tx; this.pool)
         {
             if (auto reason = tx.isInvalidReason(utxo_finder, next_height, &this.payload_checker.check))
@@ -492,6 +505,56 @@ public class Ledger
         }
 
         return null;
+    }
+
+    /***************************************************************************
+
+        Check whether the slashing data is valid.
+
+        Params:
+            data = consensus data
+
+        Returns:
+            the error message if validation failed, otherwise null
+
+    ***************************************************************************/
+
+    public string validateSlashingData (ConsensusData data) @trusted
+    {
+        if (auto fail_reason =
+            this.slash_man.isInvalidPreimageRootReason(this.getBlockHeight(),
+                data.preimage_root, data.missing_validators))
+        {
+            return fail_reason;
+        }
+
+        return null;
+    }
+
+    /***************************************************************************
+
+        Check if the received validators(MPVs) which are missing preimages
+        is the same as the local ones.
+
+        Params:
+            data = consensus data
+
+        Returns:
+            true if contents are same between the received MPVs and local ones
+
+    ***************************************************************************/
+
+    public bool isSameMissingValidatorsAsLocal (const ref ConsensusData data)
+        @trusted
+    {
+        uint[] local_missing;
+        this.slash_man.getMissingValidators(local_missing,
+            this.getBlockHeight());
+
+        if (data.missing_validators == local_missing)
+            return true;
+        else
+            return false;
     }
 
     /***************************************************************************

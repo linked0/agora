@@ -39,7 +39,10 @@ import agora.consensus.state.UTXODB;
 import agora.utils.Log;
 version (unittest) import agora.utils.Test;
 
+import std.algorithm;
 import std.exception;
+import std.format;
+import std.range;
 
 mixin AddLogger!();
 
@@ -136,7 +139,56 @@ public class SlashPolicy
                 valid_keys ~= key;
         }
 
+        if (valid_keys.length == 0)
+            return Hash.init;
+
         return this.enroll_man.getRandomSeed(valid_keys, height);
+    }
+
+    /***************************************************************************
+
+        Check if information for pre-images and slashed validators is valid
+
+        Params:
+            height = the height of proposed block
+            preimage_root = hash of the merkle root of the preimages
+            missing_validators = list of indices to the validator UTXO set
+                which have not revealed the preimage
+
+        Returns:
+            `null` if the information is valid at the proposed height,
+            otherwise a string explaining the reason it is invalid.
+
+    ***************************************************************************/
+
+    public string isInvalidPreimageRootReason (Height height,
+        const ref Hash preimage_root, const ref uint[] missing_validators)
+        @safe
+    {
+        assert(preimage_root != Hash.init);
+
+        Hash[] keys;
+        if (!this.enroll_man.getEnrolledUTXOs(keys) || keys.length == 0)
+        {
+            return "Could not retrieve enrollments / no enrollments found";
+            assert(0);
+        }
+
+        Hash[] valid_keys;
+        foreach (idx, key; keys)
+        {
+            if (missing_validators.find(idx).empty())
+                valid_keys ~= key;
+        }
+
+        auto local_root = this.enroll_man.getRandomSeed(valid_keys, height);
+
+        if (local_root == preimage_root)
+            return null;
+        else
+            return format!
+                "The preimage_root do not match with local preimage root [%s]"
+                (local_root);
     }
 
     /***************************************************************************
@@ -157,8 +209,10 @@ public class SlashPolicy
     private bool checkValidValidator (in Height height, in Hash utxo_key)
         @safe nothrow
     {
+        scope(failure) assert(0);
         auto preimage = this.enroll_man.getValidatorPreimage(utxo_key);
         auto enrolled = this.enroll_man.getEnrolledHeight(preimage.enroll_key);
+
         assert(height >= enrolled);
         if (preimage.distance >= cast(ushort)(height - enrolled))
             return true;

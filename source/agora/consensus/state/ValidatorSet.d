@@ -488,6 +488,9 @@ public class ValidatorSet
                 // go back to the desired preimage of a previous height
                 while (enrolled_height + distance > height)
                 {
+                    // scope(failure) assert(0);
+                    // import std.stdio;
+                    // writeln("getPreimageAt distance:", distance);
                     preimage = hashFull(preimage);
                     distance--;
                 }

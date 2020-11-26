@@ -280,6 +280,14 @@ extern(D):
             return false;
         }
 
+        // check whether the slashing related data is valid
+        if (auto msg = this.ledger.validateSlashingData(data))
+        {
+            log.fatal("tryNominate(): Invalid preimage data: {}. Data: {}",
+                    msg, data);
+            return false;
+        }
+
         return true;
     }
 
@@ -534,6 +542,7 @@ extern(D):
     {
         const cur_time = this.clock.networkTime();
         const exp_time = this.getExpectedBlockTime(Height(slot_idx));
+        ValidationLevel temp_level;
 
         try
         {
@@ -543,6 +552,21 @@ extern(D):
                 log.error("validateValue(): Validation failed: {}. Data: {}",
                     fail_reason, data);
                 return ValidationLevel.kInvalidValue;
+            }
+
+            bool is_same = this.ledger.isSameMissingValidatorsAsLocal(data);
+            if (is_same)
+            {
+                if (auto fail_reason = this.ledger.validateSlashingData(data))
+                {
+                    log.error("validateValue(): Preimage Validation failed: {}. Data: {}",
+                        fail_reason, data);
+                    return ValidationLevel.kInvalidValue;
+                }
+            }
+            else
+            {
+                temp_level = ValidationLevel.kMaybeValidValue;
             }
         }
         catch (Exception ex)
@@ -568,10 +592,13 @@ extern(D):
             // the ballot to arrive too early. A quorum slice might still accept
             // this ballot, in which case the node will be forced to accept
             // it too.
-            return ValidationLevel.kMaybeValidValue;
+            temp_level =  ValidationLevel.kMaybeValidValue;
         }
 
-        return ValidationLevel.kFullyValidatedValue;
+        if (temp_level == ValidationLevel.kMaybeValidValue)
+            return ValidationLevel.kMaybeValidValue;
+        else
+            return ValidationLevel.kFullyValidatedValue;
     }
 
     /***************************************************************************
