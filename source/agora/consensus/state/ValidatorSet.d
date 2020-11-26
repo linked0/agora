@@ -509,7 +509,8 @@ public class ValidatorSet
                 "SELECT preimage, enrolled_height, distance " ~
                 "FROM validator_set WHERE key = ? AND enrolled_height <= ? " ~
                 "AND enrolled_height + distance >= ?",
-                enroll_key.toString(), height.value, height.value);
+                enroll_key.toString(), height.value,
+                (height.value == 0) ? 0 : height.value - 1);
 
             if (!results.empty && results.oneValue!(byte[]).length != 0)
             {
@@ -706,7 +707,7 @@ unittest
     assert(set.getPreimage(utxos[0]) == preimage);
     assert(set.getPreimageAt(utxos[0], Height(0))  // N/A: enrolled at height 1!
         == PreImageInfo.init);
-    assert(set.getPreimageAt(utxos[0], Height(12))  // N/A: not revealed yet!
+    assert(set.getPreimageAt(utxos[0], Height(13))  // N/A: not revealed yet!
         == PreImageInfo.init);
     assert(set.getPreimageAt(utxos[0], Height(1))
         == PreImageInfo(enroll.utxo_key, enroll.random_seed, 0));
