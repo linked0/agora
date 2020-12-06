@@ -753,10 +753,12 @@ public class NetworkManager
                 if (this.peers.empty())  // no clients yet (discovery)
                     return;
 
+                Hash[] preimages;
                 this.getBlocksFrom(
                     Height(ledger.getBlockHeight() + 1),
                     // if any blocks fail validation => short-circuit
-                    blocks => blocks.all!(block => ledger.acceptBlock(block)));
+                    blocks => blocks.all!(block =>
+                        ledger.acceptBlock(block, preimages)));
             }
             catchup(); // avoid delay
             this.taskman.setTimer(2.seconds, &catchup, Periodic.Yes);

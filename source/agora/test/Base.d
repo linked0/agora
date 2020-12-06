@@ -1934,7 +1934,9 @@ private immutable(Block)[] generateExtraBlocks (
         auto txs = blocks[$ - 1].spendable().map!(txb => txb.sign());
 
         const NoEnrollments = null;
-        blocks ~= makeNewBlock(blocks[$ - 1], txs, NoEnrollments);
+        const NoMissingValidators = null;
+        blocks ~= makeNewBlock(blocks[$ - 1], txs, NoEnrollments, Hash.init,
+            NoMissingValidators);
     }
 
     return blocks.assumeUnique;

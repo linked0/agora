@@ -175,6 +175,7 @@ public class Ledger
                         last_read_block.header.hashFull,
                         this.utxo_set.getUTXOFinder(),
                         active_enrollments,
+                        Hash.init,
                         &this.payload_checker.check))
                         throw new Exception(
                             "A block loaded from disk is invalid: " ~
@@ -228,7 +229,8 @@ public class Ledger
     public bool onExternalized (ConsensusData data)
         @trusted
     {
-        auto block = makeNewBlock(this.last_block, data.tx_set, data.enrolls);
+        auto block = makeNewBlock(this.last_block, data.tx_set, data.enrolls,
+            data.preimage_root, data.missing_validators);
         return this.acceptBlock(block);
     }
 
@@ -240,15 +242,17 @@ public class Ledger
 
         Params:
             block = the block to add
+            preimages = HHHHHH
 
         Returns:
             true if the block was accepted
 
     ***************************************************************************/
 
-    public bool acceptBlock (const ref Block block) @safe
+    public bool acceptBlock (const ref Block block, Hash[] preimages = null)
+        @safe
     {
-        if (auto fail_reason = this.validateBlock(block))
+        if (auto fail_reason = this.validateBlock(block, preimages))
         {
             log.trace("Rejected block: {}: {}", fail_reason, block.prettify());
             return false;
@@ -563,21 +567,31 @@ public class Ledger
 
         Params:
             block = the block to check
+            preimages = HHHHHH
 
         Returns:
             the error message if block validation failed, otherwise null
 
     ***************************************************************************/
 
-    public string validateBlock (const ref Block block) nothrow @safe
+    public string validateBlock (const ref Block block, Hash[] preimages = null)
+        nothrow @safe
     {
         size_t active_enrollments = enroll_man.getValidatorCount(
                 block.header.height);
+
+        Hash local_preimage_root;
+        if (preimages == null)
+            local_preimage_root = this.slash_man.getPreimageRoot(
+                this.last_block.header.height);
+        else
+            local_preimage_root = Hash.init;
 
         return block.isInvalidReason(this.last_block.header.height,
             this.last_block.header.hashFull,
             this.utxo_set.getUTXOFinder(),
             active_enrollments,
+            local_preimage_root,
             &this.payload_checker.check);
     }
 
@@ -1191,7 +1205,9 @@ private immutable(Block)[] genBlocksToIndex (
         auto txs = blocks[$ - 1].spendable().map!(txb => txb.sign());
 
         const NoEnrollments = null;
-        blocks ~= makeNewBlock(blocks[$ - 1], txs, NoEnrollments);
+        const NoMissingValidators = null;
+        blocks ~= makeNewBlock(blocks[$ - 1], txs, NoEnrollments, Hash.init,
+            NoMissingValidators);
     }
 
     return blocks.assumeUnique;

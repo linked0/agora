@@ -448,11 +448,15 @@ unittest
         prev_block = the previous block
         txs = the transactions that will be contained in the new block
         enrollments = the enrollments that will be contained in the new block
+        preimage_root = Hash of the merkle root of the preimages
+        missing_validators = list of indices to the validator UTXO set
+            which have not revealed the preimage
 
 *******************************************************************************/
 
 public Block makeNewBlock (Transactions)(const ref Block prev_block,
-    Transactions txs, Enrollment[] enrollments) @safe nothrow
+    Transactions txs, Enrollment[] enrollments, Hash preimage_root,
+    uint[] missing_validators) @safe nothrow
 {
     static assert (isInputRange!Transactions);
 
@@ -468,6 +472,12 @@ public Block makeNewBlock (Transactions)(const ref Block prev_block,
     block.header.enrollments.sort!((a, b) => a.utxo_key < b.utxo_key);
     assert(block.header.enrollments.isStrictlyMonotonic!
         ("a.utxo_key < b.utxo_key"));  // there cannot be duplicates either
+
+    block.header.preimage_root = preimage_root;
+    block.header.missing_validators = missing_validators;
+    block.header.missing_validators.sort!((a, b) => a < b);
+    assert(block.header.missing_validators.isStrictlyMonotonic!
+        ("a < b"));  // there cannot be duplicates either
     return block;
 }
 
@@ -477,7 +487,7 @@ version (unittest)
     public Block makeNewBlock (Transactions)(const ref Block prev_block,
         Transactions txs) @safe nothrow
     {
-        return makeNewBlock(prev_block, txs, null);
+        return makeNewBlock(prev_block, txs, null, Hash.init, null);
     }
 }
 
@@ -505,9 +515,16 @@ version (unittest)
             "7caa4fcffdc5c068a07532637cf5042ae39b7af418847385480e620e1395987")
     };
 
-    auto block = makeNewBlock(GenesisBlock, [Transaction.init], [enr_1, enr_2]);
+    auto primage_root = Hash("0x47c993d409aa7d77651ecaa5a5d29e47a7aee609c7" ~
+                             "cb376f5f8ff2a868c738233a2df5ba11d635c8576a47" ~
+                             "3864fc1c8fd1469f4be80b853764da53f6a5b41661");
+    uint[] missing_validators = [];
+
+    auto block = makeNewBlock(GenesisBlock, [Transaction.init], [enr_1, enr_2],
+        primage_root, missing_validators);
     assert(block.header.enrollments == [enr_1, enr_2]);  // ascending
-    block = makeNewBlock(GenesisBlock, [Transaction.init], [enr_2, enr_1]);
+    block = makeNewBlock(GenesisBlock, [Transaction.init], [enr_2, enr_1],
+        primage_root, missing_validators);
     assert(block.header.enrollments == [enr_1, enr_2]);  // ditto
 }
 
