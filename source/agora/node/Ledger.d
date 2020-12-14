@@ -506,7 +506,7 @@ public class Ledger
 
     /***************************************************************************
 
-        Check whether the slashing data is valid.
+        HHHHHH
 
         Params:
             data = consensus data
@@ -520,6 +520,19 @@ public class Ledger
     {
         return this.slash_man.isInvalidPreimageRootReason(this.getBlockHeight(),
                 data.missing_validators);
+    }
+
+    /***************************************************************************
+
+        HHHHHH
+
+    ***************************************************************************/
+
+    public string isSameSlashingData (in ConsensusData data) @safe
+    {
+        Hash[] local_missing;
+        this.slash_man.getMissingValidators(local_missing, this.getBlockHeight());
+        return data.missing_validators == local_missing;
     }
 
     /***************************************************************************

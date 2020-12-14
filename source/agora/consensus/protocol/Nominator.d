@@ -558,6 +558,14 @@ extern(D):
                 log.info("validateValue(): Preimage Validation failed, but " ~
                     "return kMaybeValidValue. Reason: {}, Data: {}",
                     fail_reason, data);
+                return ValidationLevel.kInvalidValue;
+            }
+
+            if (!this.ledger.isSameSlashingData(data))
+            {
+                log.info("validateValue(): Preimage Validation failed, but " ~
+                    "return kMaybeValidValue. Reason: {}, Data: {}",
+                    fail_reason, data);
                 return ValidationLevel.kMaybeValidValue;
             }
         }

@@ -195,23 +195,12 @@ public class SlashPolicy
     public string isInvalidPreimageRootReason (Height height,
         const ref uint[] missing_validators) @safe
     {
-        Hash[] keys;
-        if (!this.enroll_man.getEnrolledUTXOs(keys) || keys.length == 0)
-        {
-            log.fatal("Could not retrieve enrollments / no enrollments found");
-            assert(0);
-        }
-
-        uint[] local_missing_validators;
-        foreach (idx, key; keys)
-        {
-            if (!this.hasRevealedPreimage(height, key))
-                local_missing_validators ~= cast(uint)idx;
-        }
-
-        if (local_missing_validators != missing_validators)
-            return "The list of missing validators does not match with the local one";
-
+        // HHHHHH
+        // array is bigginer tahn the total number of active validator
+        // Drey: You could do one more check here. If the array is bigger
+        // than the total number of active validators, then it's clearly
+        // invalid. So in that case you can return kInvalidValue.
+        // My question: what is the total number of active validators.
         return null;
     }
 }
