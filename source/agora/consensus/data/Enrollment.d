@@ -70,6 +70,21 @@ public struct Enrollment
     }
 }
 
+/*******************************************************************************
+
+    Define enrollment stored in the pool
+
+*******************************************************************************/
+
+public struct PoolEnrollment
+{
+    /// An enrollment data in the pool
+    public Enrollment enrollment;
+
+    /// The available height set on being stored in the pool
+    public Height avail_height;
+}
+
 /// test for the computeHash function
 unittest
 {
@@ -101,4 +116,10 @@ unittest
         enroll_sig: sig,
     };
     testSymmetry(record);
+
+    PoolEnrollment pool_record = {
+        enrollment: record,
+        avail_height: Height(84),
+    };
+    testSymmetry(pool_record);
 }
