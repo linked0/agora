@@ -356,4 +356,19 @@ public interface API
 
     @method(HTTPMethod.GET)
     public Enrollment getEnrollment (in Hash enroll_hash);
+
+    /***************************************************************************
+
+        API:
+            GET /enrollments
+
+        Params:
+            enroll_keys = keys for enrollments which hashes of frozen UTXOs
+
+        Returns:
+            All the enrollments in the enrollment pool
+
+    ***************************************************************************/
+
+    public PoolEnrollment[] getEnrollments (Set!Hash enroll_keys);
 }

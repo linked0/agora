@@ -17,6 +17,7 @@
 module agora.consensus.pool.Enrollment;
 
 import agora.common.ManagedDatabase;
+import agora.common.Set;
 import agora.common.Types;
 import agora.crypto.Key;
 import agora.consensus.data.Block;

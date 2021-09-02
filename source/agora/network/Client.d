@@ -559,6 +559,21 @@ public class NetworkClient
 
     /***************************************************************************
 
+        Get the array of the enrollments in the enrollment pool
+
+        Returns:
+            the array of enrollmnets in the enrollment pool
+            If the request failed, returns an empty array
+
+    ***************************************************************************/
+
+    public PoolEnrollment[] getEnrollments (Set!Hash enroll_keys) @trusted nothrow
+    {
+        return this.attemptRequest!(API.getEnrollments, Throw.No)(this.api, enroll_keys);
+    }
+
+    /***************************************************************************
+
         Attempt a request up to 'this.max_retries' attempts, and make the task
         wait this.retry_delay between each attempt.
 

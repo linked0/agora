@@ -189,6 +189,28 @@ paths:
           description: Success
         default:
           description: Unexpected error
+  /enrollments:
+    get:
+      summary: fetch enrollments
+      parameters:
+        - in: query
+          name: enroll_keys
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Set'
+      responses:
+        '200':
+          description: enrolls
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PoolEnrollment'
+        default:
+          description: Unexpected error
   /block_headers:
     get:
       summary: fetch headers
@@ -441,6 +463,15 @@ components:
           type: string
         utxo_key:
           type: string
+
+    PoolEnrollment:
+      type: object
+      properties:
+        enrollment:
+          $ref: '#/components/schemas/Enrollment'
+        avail_height:
+          type: integer
+          format: uint64
 
     BlockHeader:
       type: object

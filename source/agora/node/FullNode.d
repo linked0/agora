@@ -1043,6 +1043,19 @@ public class FullNode : API
         return this.enroll_man.getEnrollment(enroll_hash);
     }
 
+    /// GET: /enrollments
+    public override PoolEnrollment[] getEnrollments (Set!Hash enroll_keys) @safe
+    {
+        PoolEnrollment[] enrolls;
+        foreach (const key; enroll_keys)
+        {
+            auto enroll = this.enroll_man.enroll_pool.getEnrollment(key);
+            auto avail_height = this.enroll_man.enroll_pool.getAvailableHeight(key);
+            enrolls ~= PoolEnrollment(enroll, avail_height);
+        }
+        return enrolls;
+    }
+
     /// POST /preimage
     public override void postPreimage (in PreImageInfo preimage) @safe
     {
