@@ -414,6 +414,8 @@ public class FullNode : API
             this.config.node.network_discovery_interval, &this.discoveryTask, Periodic.Yes);
         this.timers ~= this.taskman.setTimer(
             this.config.node.block_catchup_interval, &this.catchupTask, Periodic.Yes);
+        this.timers ~= this.taskman.setTimer(
+            this.config.node.enrollment_catchup_interval, &this.catchupEnrollmentTask, Periodic.Yes);
 
         // Immediately run discovery to avoid delays at startup
         this.taskman.runTask(&this.discoveryTask);
@@ -500,6 +502,21 @@ public class FullNode : API
         {
             log.error("Error sending updated block headers:{}", e);
         }
+    }
+
+    /***************************************************************************
+
+        Periodically retrieve the missing enrollments and apply them to the
+        enrollment manager.
+
+    ***************************************************************************/
+
+    protected void catchupEnrollmentTask () nothrow
+    {
+        if (this.network.peers.empty())  // no clients yet (discovery)
+            return;
+
+        this.network.getEnrollments(this.enroll_man, this.utxo_set.getUTXOFinder());
     }
 
     /***************************************************************************
@@ -1026,7 +1043,12 @@ public class FullNode : API
         this.recordReq("postEnrollment");
 
         UTXO utxo;
-        this.utxo_set.peekUTXO(enroll.utxo_key, utxo);
+        if (!this.utxo_set.peekUTXO(enroll.utxo_key, utxo))
+        {
+            this.enroll_man.addMissingEnrollment(enroll.utxo_key);
+            return;
+        }
+
         const utxo_address = utxo.output.address;
         if (this.enroll_man.addEnrollment(enroll, utxo_address,
             this.ledger.getBlockHeight() + 1, this.utxo_set.getUTXOFinder()))

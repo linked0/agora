@@ -47,6 +47,7 @@
 module agora.consensus.EnrollmentManager;
 
 import agora.common.ManagedDatabase;
+import agora.common.Set;
 import agora.common.Types;
 import agora.consensus.data.Block;
 import agora.consensus.data.Enrollment;
@@ -110,6 +111,9 @@ public class EnrollmentManager
 
     /// Ditto
     private PreImageCycle cycle;
+
+    /// Set to store enrollments that fail to be added when initially received
+    private Set!Hash missing_enrolls;
 
     /// Parameters for consensus-critical constants
     private immutable(ConsensusParams) params;
@@ -213,6 +217,35 @@ public class EnrollmentManager
 
         return this.enroll_pool.add(enroll, Height(available), finder,
                                     &this.validator_set.findRecentEnrollment);
+    }
+
+    /***************************************************************************
+
+        Add a enrollment data with the available height to the enrollment pool
+
+        Params:
+            enroll = the enrollment data to add
+            avail_height = height at which the enrollment is available
+            finder = the delegate to find UTXOs with
+
+        Returns:
+            true if the enrollment data has been added to the enrollment pool
+
+    ***************************************************************************/
+
+    public bool addEnrollment (in Enrollment enroll, in Height avail_height,
+        scope UTXOFinder finder) @safe nothrow
+    {
+        if (this.enroll_pool.add(enroll, avail_height, finder,
+                                    &this.validator_set.findRecentEnrollment))
+        {
+            this.missing_enrolls.remove(enroll.utxo_key);
+            return true;
+        }
+        else
+        {
+            return false;
+        }
     }
 
     /***************************************************************************
@@ -736,6 +769,42 @@ public class EnrollmentManager
     public Enrollment getEnrollment (in Hash enroll_hash) @trusted
     {
         return this.enroll_pool.getEnrollment(enroll_hash);
+    }
+
+    /***************************************************************************
+
+        Add missing enrollment information
+
+        Params:
+            enroll_key = the key of the missing enrollment
+
+    ***************************************************************************/
+
+    public void addMissingEnrollment (in Hash enroll_key) @safe nothrow
+    {
+        this.missing_enrolls.put(enroll_key);
+    }
+
+    /***************************************************************************
+
+        Get the UTXO keys of mssing enrollments
+
+        Returns:
+            set of UTXO keys that EnrollmentManager is missing
+
+    ***************************************************************************/
+
+    public Set!Hash getMissingEnrollments () @safe
+    {
+        Set!Hash local_missing_enrolls;
+        foreach (key; this.missing_enrolls)
+        {
+            if (this.getEnrollment(key) == Enrollment.init)
+                local_missing_enrolls.put(key);
+        }
+
+        this.missing_enrolls = local_missing_enrolls;
+        return missing_enrolls;
     }
 
     /***************************************************************************

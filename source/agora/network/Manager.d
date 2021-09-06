@@ -30,10 +30,13 @@ import agora.common.Metadata;
 import agora.common.Set;
 import agora.common.Task;
 import agora.consensus.data.Block;
+import agora.consensus.data.Enrollment;
 import agora.consensus.data.Params;
 import agora.consensus.data.PreImageInfo;
 import agora.consensus.data.UTXO;
 import agora.consensus.data.ValidatorBlockSig;
+import agora.consensus.EnrollmentManager;
+import agora.consensus.state.UTXOCache;
 import agora.crypto.Hash;
 import agora.crypto.Key;
 import agora.network.Clock;
@@ -56,7 +59,7 @@ import std.datetime.stopwatch;
 import std.exception;
 import std.format;
 import std.random;
-import std.range : walkLength;
+import std.range;
 
 import core.stdc.time;
 import core.time;
@@ -1061,6 +1064,44 @@ public class NetworkManager
             log.error("getMissingBlockSigs: Exception thrown : {}", e.msg);
         }
         return headers_updated;
+    }
+
+    /// Retrieve all the missing enrollments from the connected nodes
+    public void getEnrollments (EnrollmentManager enroll_man,
+        scope UTXOFinder finder) @safe nothrow
+    {
+        NodeConnInfo[] conns = this.peers.array;
+        ulong[] conn_indices = conns.length.iota.array;
+
+        // Get the set of missing enrollments from the EnrollmentManager
+        Set!Hash missing_enrolls;
+        try
+        {
+            missing_enrolls = enroll_man.getMissingEnrollments();
+        }
+        catch (Exception e)
+        {
+            log.error("getEnrollments: Exception thrown : {}", e.msg);
+            return;
+        }
+
+        // Retrieve missing enrollments from other nodes
+        foreach (idx; conn_indices)
+        {
+            if (missing_enrolls.length == 0)
+                break;
+
+            auto pool_enrolls = conns[idx].client.getEnrollments(missing_enrolls);
+            foreach (enroll; pool_enrolls)
+            {
+                import std.stdio;
+                scope(failure) assert(0);
+                if (enroll_man.addEnrollment(enroll.enrollment, enroll.avail_height, finder))
+                {
+                    missing_enrolls.remove(enroll.enrollment.utxo_key);
+                }
+            }
+        }
     }
 
     /// Shut down timers & dump the metadata
