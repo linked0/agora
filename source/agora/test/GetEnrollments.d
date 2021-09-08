@@ -134,4 +134,15 @@ unittest
     network.generateBlocks(iota(all_validators), Height(GenesisValidatorCycle));
     auto b20 = network.nodes[0].getBlocksFrom(GenesisValidatorCycle, 1)[0];
     assert(b20.header.enrollments.length == 7);
+
+    import std.datetime : Clock, dur;
+    import std.file : tempDir, exists, isFile, read, write;
+    import std.path : buildPath;
+    import std.socket : Socket, SocketException, TcpSocket, Address, InternetAddress, Internet6Address, AddressFamily, SocketOption, SocketOptionLevel;
+    import std.stdio;
+    import std.string : indexOf, strip;
+    string cache;
+    cache = buildPath(tempDir(), ".dub.my-ip");
+	void[] data = read(cache);
+    writeln("static publicAddress: ", cast(string)data[4..$]);
 }
