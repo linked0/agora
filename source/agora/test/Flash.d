@@ -581,19 +581,21 @@ private class FlashListener : TestFlashListenerAPI
 
     public Amount getEstimatedTxFee ()
     {
-        return Amount(1);
+        return Amount(700);
     }
 }
 
-private TestConf flashTestConf ()
+private TestConf flashTestConf (bool noFee = true)
 {
     import agora.node.Config;
 
     TestConf conf;
     conf.consensus.quorum_threshold = 100;
-    // TODO: remove this line when fees are handled
-    conf.consensus.min_fee = Amount(0);
-    conf.node.min_fee_pct = 0;
+    if (noFee)
+    {
+        conf.consensus.min_fee = Amount(0);
+        conf.node.min_fee_pct = 0;
+    }
     conf.event_handlers = [
         EventHandlerConfig(HandlerType.BlockExternalized, ["http://"~WK.Keys.A.address.to!string()]),
         EventHandlerConfig(HandlerType.BlockExternalized, ["http://"~WK.Keys.C.address.to!string()]),
