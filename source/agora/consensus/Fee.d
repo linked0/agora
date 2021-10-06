@@ -246,11 +246,12 @@ public class FeeManager
 
     public string check (in Transaction tx, Amount tx_fee) nothrow @safe
     {
+        scope(failure) assert(0);
         Amount minimumFee = params.MinFee;
         if (!minimumFee.mul(tx.sizeInBytes()))
             return "Fee: Transaction size overflows fee cap";
         if (tx_fee < minimumFee)
-            return "Transaction: Fee rate is less than minimum";
+            return format!"Transaction: Fee rate is less than minimum %s"(minimumFee);
 
         if (tx.payload.length == 0)
             return null;

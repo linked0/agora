@@ -90,7 +90,7 @@ public class EnrollmentManager
     private ManagedDatabase db;
 
     /// Node's key pair
-    private KeyPair key_pair;
+    public KeyPair key_pair;
 
     /// Key used for enrollment which is actually an UTXO hash
     private Hash enroll_key;

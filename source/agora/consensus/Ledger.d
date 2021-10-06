@@ -369,8 +369,15 @@ public class Ledger
             fee_rate = tx_fee;
             fee_rate.div(tx.sizeInBytes());
 
-            return this.fee_man.check(tx, tx_fee);
+            auto msg = this.fee_man.check(tx, tx_fee);
+            log.error("fee_man.check in acceptTransaction: {}", msg);
+
+            return msg;
         };
+
+        // import std.stdio;
+        // import agora.utils.PrettyPrinter;
+        // writeln("###### acceptTransaction: ", this.enroll_man.key_pair.address.prettify);
 
         if (auto reason = tx.isInvalidReason(this.engine,
                 this.utxo_set.getUTXOFinder(),

@@ -561,6 +561,9 @@ private class FlashListener : TestFlashListenerAPI
     {
         auto last_height = agora_node.getBlockHeight();
 
+        import std.stdio;
+        writeln("amount in getFreeUTXOs: ", amount);
+
         FeeUTXOs utxos;
         do
         {
@@ -569,12 +572,19 @@ private class FlashListener : TestFlashListenerAPI
             foreach (idx, output; tx.outputs)
                 if (output.address() == pk)
                 {
-                    utxos.utxos ~= UTXO.getHash(tx.hashFull(), idx);
+                    auto utxo = UTXO.getHash(tx.hashFull(), idx);
+                    utxos.utxos ~= utxo;
                     utxos.total_value += output.value;
+                    auto per_byte = this.getEstimatedTxFee();
+                    per_byte.mul(Input(utxo).sizeInBytes());
+                    amount.add(per_byte);
                 }
 
             last_height--;
         } while (last_height > 0 && utxos.total_value < amount);
+
+        utxos.total_fee = amount;
+        writeln("amount in getFreeUTXOs: ", amount, ", utxos.total_value: ", utxos.total_value);
 
         return utxos;
     }
@@ -609,7 +619,7 @@ private TestConf flashTestConf (bool noFee = true)
 //version (none)
 unittest
 {
-    auto conf = flashTestConf();
+    auto conf = flashTestConf(false);
     auto network = makeTestNetwork!FlashNodeFactory(conf);
     scope (exit) network.shutdown();
     scope (failure) network.printLogs();
@@ -643,6 +653,8 @@ unittest
 
     // await funding transaction
     network.expectTxExternalization(chan_id);
+
+    writeln("###### height: ", network.clients[0].getBlockHeight());
 
     // wait for the parties & listener to detect the funding tx
     alice.waitForChannelOpen(WK.Keys.A.address, chan_id);
@@ -678,6 +690,8 @@ unittest
     network.listener.waitUntilChannelState(chan_id,
         ChannelState.StartedUnilateralClose);
 
+    writeln("###### height: ", network.clients[0].getBlockHeight());
+
     // at this point charlie will automatically publish the latest update tx
     // and then a settlement will be published (but only after time lock expires)
     iota(Settle_1_Blocks * 2).each!(idx => network.addBlock(true));
@@ -686,7 +700,7 @@ unittest
 
 /// Test the settlement timeout branch for the
 /// unilateral non-collaborative close (funding + update* + settle)
-//version (none)
+version (none)
 unittest
 {
     auto conf = flashTestConf();
@@ -771,7 +785,7 @@ unittest
 
 /// Test attempted collaborative close with a non-collaborative counter-party,
 /// forcing the first counter-party to initiate a non-collaborative close.
-//version (none)
+version (none)
 unittest
 {
     static class RejectingCloseNode : TestFlashNode
@@ -868,7 +882,7 @@ unittest
 }
 
 /// Test indirect channel payments
-//version (none)
+version (none)
 unittest
 {
     auto conf = flashTestConf();
@@ -994,6 +1008,7 @@ unittest
 }
 
 /// Test path probing
+version (none)
 unittest
 {
     auto conf = flashTestConf();
@@ -1146,6 +1161,7 @@ unittest
 }
 
 /// Test path probing
+version (none)
 unittest
 {
     auto conf = flashTestConf();
@@ -1341,6 +1357,7 @@ unittest
         ChannelState.Closed);
 }
 
+version (none)
 unittest
 {
     static class BleedingEdgeFlashNode : TestFlashNode
@@ -1420,7 +1437,7 @@ unittest
 }
 
 /// Test node serialization & loading
-//version (none)
+version (none)
 unittest
 {
     auto conf = flashTestConf();
@@ -1493,6 +1510,7 @@ unittest
 }
 
 /// test various error cases
+version (none)
 unittest
 {
     auto conf = flashTestConf();
@@ -1674,6 +1692,7 @@ unittest
 }
 
 /// test listener API and payment success / failures
+version (none)
 unittest
 {
     static class RejectingFlashNode : TestFlashNode
@@ -1779,6 +1798,7 @@ unittest
 }
 
 /// test listener API rejecting channels
+version (none)
 unittest
 {
     /// Rejects opening new channels
@@ -1845,7 +1865,7 @@ unittest
 }
 
 /// Test unilateral non-collaborative close (funding + update* + settle)
-//version (none)
+version (none)
 unittest
 {
     auto conf = flashTestConf();
@@ -1943,6 +1963,7 @@ unittest
 }
 
 /// Test private channels
+version (none)
 unittest
 {
     auto conf = flashTestConf();

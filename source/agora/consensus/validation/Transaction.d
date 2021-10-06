@@ -199,10 +199,26 @@ public string isInvalidReason (
     Amount new_unspent;
     if (!tx.getSumOutput(new_unspent))
         return "Transaction: Referenced Output(s) overflow";
+
+    Amount temp_sum_unspent = sum_unspent;
     if (!sum_unspent.sub(new_unspent))
         return "Transaction: Output(s) are higher than Input(s)";
     // NOTE: Make sure fees are always checked last
-    return checkFee(tx, sum_unspent);
+    auto ret = checkFee(tx, sum_unspent);
+    scope(failure) assert(0);
+    import std.stdio;
+    if (ret != null)
+    {
+        scope(failure) assert(0);
+        import std.stdio;
+        writeln("tx size: ", tx.sizeInBytes2(), ", tx: ", tx);
+        writeln("BAD (", ret, ")- height: ", height, " - temp_sum_unspent: ", temp_sum_unspent, ", new_unspect: ", new_unspent);
+    }
+    // else if (height <= 3)
+    // {
+    //     writeln("height: ", height);
+    // }
+    return ret;
 }
 
 /// Ditto but returns a bool, only used in unittests

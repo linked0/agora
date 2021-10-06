@@ -632,6 +632,9 @@ LOuter: while (1)
                 = genKeyUnlock(this.kp.sign(this.conf.funding_tx.getChallenge()));
 
             log.info("Publishing funding tx..");
+            import std.stdio;
+            import agora.utils.PrettyPrinter;
+            writeln("###### txPublisher calling: ", this.kp.address.prettify());
             this.txPublisher(funding_tx_signed);
         }
 

@@ -105,6 +105,14 @@ public struct Transaction
         return size;
     }
 
+    public ulong sizeInBytes2 () const nothrow pure @nogc
+    {
+        ulong size = this.payload.length;
+        foreach (const ref input; this.inputs)
+            size += input.sizeInBytes();
+        return size;
+    }
+
     /// Support for sorting transactions
     public int opCmp (in Transaction other) const nothrow @nogc
     {
