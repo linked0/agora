@@ -1421,7 +1421,7 @@ public class FlashNode : FlashControlAPI
         // Always pay with the node key
         auto utxos = this.listener.getFeeUTXOs(this.conf.key_pair.address, per_byte);
         // reuse total_value as refund amount
-        if (!utxos.total_value.sub(per_byte))
+        if (!utxos.total_value.sub(utxos.total_fee))
             utxos.total_value = Amount(0);
         return utxos;
     }

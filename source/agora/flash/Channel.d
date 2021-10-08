@@ -780,6 +780,9 @@ LOuter: while (1)
             log.info("{}: Publishing last settle tx {}: {}",
                 this.own_pk.flashPrettify, this.channel_updates.length,
                 settle_tx.hashFull().flashPrettify);
+
+            import agora.utils.PrettyPrinter;
+            writeln("###### txPublisher calling checkPublishSettlement: ", this.kp.address.prettify());
             this.txPublisher(cast()settle_tx);
         }
     }
@@ -1990,6 +1993,9 @@ LOuter: while (1)
         // todo: schedule this
         log.info("{}: Publishing close tx: {}",
             this.own_pk.flashPrettify, this.pending_close.tx.hashFull.flashPrettify);
+
+        import agora.utils.PrettyPrinter;
+        writeln("###### txPublisher calling collectCloseSignatures: ", this.kp.address.prettify());
         this.txPublisher(this.pending_close.tx);
     }
 
@@ -2225,6 +2231,8 @@ LOuter: while (1)
         auto update_tx = update.update_tx.serializeFull.deserializeFull!Transaction();
         assert(update_tx.inputs.length == 1);
         assert(update_tx.outputs.length == 1);
+        size_t cur_size;
+        size_t prev_size;
 
         // point the input to the last update utxo if not trigger TX
         if (this.last_externalized_update_utxo != Hash.init && update.seq_id != 0)
@@ -2233,7 +2241,13 @@ LOuter: while (1)
         auto update_input = update_tx.inputs[0];
         auto update_ouput = update_tx.outputs[0];
 
-        auto utxos = this.getFeeUTXOs(update_tx.sizeInBytes());
+        auto max_size = update_tx.sizeInBytes();
+        auto mock_refund_output = Output(Amount.init, this.own_pk);
+        max_size += mock_refund_output.sizeInBytes();
+        auto mock_update_unlock = this.update_signer.makeUpdateUnlock(SigPair.init, update.seq_id);
+        max_size += mock_update_unlock.sizeInBytes();
+
+        auto utxos = this.getFeeUTXOs(max_size);
         update_tx.inputs ~= utxos.utxos.map!(hash => Input(hash)).array;
         update_tx.inputs.sort();
 
@@ -2250,6 +2264,7 @@ LOuter: while (1)
         multi_sig.output_idx = output_idx;
 
         auto fee_sig = SigPair(this.kp.sign(update_tx.getChallenge()));
+
         // update input unlocks
         foreach (idx; 0..update_tx.inputs.length)
             if (idx == input_idx)
@@ -2259,6 +2274,9 @@ LOuter: while (1)
 
         log.info("{}: Publishing update tx {}: {}",
             this.own_pk.flashPrettify, update.seq_id, update_tx.hashFull().flashPrettify);
+
+        import agora.utils.PrettyPrinter;
+        writeln("###### txPublisher calling publishUpdateTx: ", this.kp.address.prettify());
         this.txPublisher(update_tx);
         return update_tx;
     }

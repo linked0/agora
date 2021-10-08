@@ -60,6 +60,12 @@ public string isInvalidReason (
     import std.algorithm;
     import std.conv;
 
+    // {
+    //     import std.stdio;
+    //     scope(failure) assert(0);
+    //     writeln("height Transaction.isInvalidReason: ", height);
+    // }
+
     if (!tx.isCoinbase && tx.inputs.length == 0)
         return "Transaction: No input";
 
