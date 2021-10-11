@@ -52,6 +52,8 @@ public Unlock signUnlock (KeyPair key_pair, Transaction tx)
 
 *******************************************************************************/
 
+public shared bool b_log = false;
+
 public string isInvalidReason (
     in Transaction tx, Engine engine, scope UTXOFinder findUTXO, in Height height,
     scope string delegate (in Transaction, Amount) @safe nothrow checkFee)
@@ -60,10 +62,11 @@ public string isInvalidReason (
     import std.algorithm;
     import std.conv;
 
+    import std.stdio;
+    scope(failure) assert(0);
+    // if (b_log)
     // {
-    //     import std.stdio;
-    //     scope(failure) assert(0);
-    //     writeln("height Transaction.isInvalidReason: ", height);
+    //     writeln("###### height Transaction.isInvalidReason: ", height);
     // }
 
     if (!tx.isCoinbase && tx.inputs.length == 0)
@@ -118,7 +121,13 @@ public string isInvalidReason (
 
         if (auto error = engine.execute(utxo_value.output.lock, input.unlock,
             tx, input))
+        {
+            if (b_log)
+            {
+                writeln("###### engine.execute error: ", error);
+            }
             return error;
+        }
 
         return null;
     }
@@ -156,7 +165,11 @@ public string isInvalidReason (
         {
             UTXO utxo_value;
             if (auto fail_reason = isInvalidInput(input, utxo_value, sum_unspent))
+            {
+                if (b_log) writeln("isInvalidInput: ", fail_reason, ", input: ",
+                    input);
                 return fail_reason;
+            }
 
             // when status is frozen, it will begin to melt
             // In this case, all inputs must be frozen.
@@ -211,13 +224,13 @@ public string isInvalidReason (
     {
         scope(failure) assert(0);
         import std.stdio;
-        writeln("tx size: ", tx.sizeInBytes2(), ", tx: ", tx);
-        writeln("BAD (", ret, ")- height: ", height, " - temp_sum_unspent: ", temp_sum_unspent, ", new_unspect: ", new_unspent);
+        writeln("======> tx size: ", tx.sizeInBytes(), ", tx: ", tx);
+        writeln("======> BAD (", ret, ")- height: ", height, " - temp_sum_unspent: ", temp_sum_unspent, ", new_unspect: ", new_unspent);
     }
-    // else if (height <= 3)
-    // {
-    //     writeln("height: ", height);
-    // }
+    else if (b_log)
+    {
+        writeln("======> tx size: ", tx.sizeInBytes(), " SUCCEEDED");
+    }
     return ret;
 }
 

@@ -173,7 +173,7 @@ public class Channel
         this.taskman = taskman;
         this.txPublisher = txPublisher;
         this.update_signer = new UpdateSigner(this.flash_conf, this.conf,
-            this.kp, this.peer_pk, this.engine, this.taskman, db);
+            this.kp, this.peer_pk, this.engine, this.taskman, getFeeUTXOs, db);
         this.paymentRouter = paymentRouter;
         this.onChannelNotify = onChannelNotify;
         this.onPaymentComplete = onPaymentComplete;
@@ -223,7 +223,7 @@ public class Channel
         this.taskman = taskman;
         this.txPublisher = txPublisher;
         this.update_signer = new UpdateSigner(this.flash_conf, this.conf,
-            this.kp, this.peer_pk, this.engine, this.taskman, db);
+            this.kp, this.peer_pk, this.engine, this.taskman, getFeeUTXOs, db);
         this.paymentRouter = paymentRouter;
         this.onChannelNotify = onChannelNotify;
         this.onPaymentComplete = onPaymentComplete;
@@ -553,6 +553,8 @@ public class Channel
         }
 
         // check on start-up once in case this is a preloaded channel
+        import std.stdio;
+        writeln("eventLoop");
         this.checkPublishSettlement();
 
 LOuter: while (1)
@@ -775,6 +777,46 @@ LOuter: while (1)
         assert(this.update_ext_height != Height(0));
 
         // ready to publish settlement
+        // if (this.height >= this.update_ext_height + this.conf.settle_time)
+        // {
+        //     auto settle_tx = this.channel_updates[$ - 1].settle_tx;
+        //     // point the input to the last update utxo
+        //     settle_tx.inputs[0].utxo = this.last_externalized_update_utxo;
+
+        //     auto settle_input = settle_tx.inputs[0];
+        //     auto settle_ouput = settle_tx.outputs[0];
+
+        //     // calculate fee
+        //     auto max_size = settle_tx.sizeInBytes();
+        //     auto mock_refund_output = Output(Amount.init, this.kp.address);
+        //     max_size += mock_refund_output.sizeInBytes();
+        //     auto utxos = this.getFeeUTXOs(max_size);
+        //     settle_tx.inputs ~= utxos.utxos.map!(hash => Input(hash)).array;
+        //     settle_tx.inputs.sort();
+        //     if (utxos.total_value > 0.coins)
+        //         settle_tx.outputs ~= [Output(utxos.total_value, this.kp.address)];
+        //     settle_tx.outputs.sort();
+
+        //     auto output_idx = settle_tx.outputs.countUntil(settle_ouput);
+        //     auto input_idx = settle_tx.inputs.countUntil(settle_input);
+
+        //     auto multi_sig = this.channel_updates[$ - 1].our_settle_sig.
+        //         serializeFull.deserializeFull!SigPair();
+        //     multi_sig.output_idx = output_idx;
+        //     auto fee_sig = SigPair(this.kp.sign(settle_tx.getChallenge()));
+        //     foreach (idx; 0 .. settle_tx.inputs.length)
+        //         if (idx == input_idx)
+        //             settle_tx.inputs[idx].unlock =
+        //                 this.update_signer.makeUpdateUnlock(multi_sig, channel_updates[$ - 1].seq_id);
+        //         else
+        //             settle_tx.inputs[idx].unlock = genKeyUnlock(fee_sig);
+
+        //     log.info("{}: Publishing last settle tx {}: {}",
+        //         this.own_pk.flashPrettify, this.channel_updates.length,
+        //         settle_tx.hashFull().flashPrettify);
+        //     this.txPublisher(cast()settle_tx);
+        // }
+
         if (this.height >= this.update_ext_height + this.conf.settle_time)
         {
             auto settle_tx = this.channel_updates[$ - 1].settle_tx;
@@ -783,9 +825,6 @@ LOuter: while (1)
             log.info("{}: Publishing last settle tx {}: {}",
                 this.own_pk.flashPrettify, this.channel_updates.length,
                 settle_tx.hashFull().flashPrettify);
-
-            import agora.utils.PrettyPrinter;
-            writeln("###### txPublisher calling checkPublishSettlement: ", this.kp.address.prettify());
             this.txPublisher(cast()settle_tx);
         }
     }
@@ -865,7 +904,9 @@ LOuter: while (1)
                 format("onRequestSettleSig: expected seq_id: %s. Got: %s",
                     cur_seq_id, seq_id));
 
-        return this.update_signer.getSettleSig();
+        auto sig = this.update_signer.getSettleSig();
+        writeln("$$$$$$ getSettleSig sig: ", sig);
+        return sig;
     }
 
     /***************************************************************************
@@ -1639,8 +1680,14 @@ LOuter: while (1)
     {
         this.height = block.header.height;
 
+        import std.stdio;
+        writeln("###### onBlockExternalized - height: ", block.header.height,
+            "\n", block.txs);
+
         foreach (tx; block.txs)
         {
+            writeln("###### tx hash: ", tx.hashFull());
+
             uint update_utxo_idx;
             bool update_is_last;
             if (tx.hashFull() == this.conf.funding_tx_hash)
@@ -1661,6 +1708,7 @@ LOuter: while (1)
             {
                 log.info("{}: Update tx externalized({}) on height {}",
                     this.own_pk.flashPrettify, tx.hashFull().flashPrettify, block.header.height);
+                writeln("onBlockExternalized - update_utxo_idx: ", update_utxo_idx);
                 this.onUpdateTxExternalized(tx, update_utxo_idx, update_is_last);
             }
             else
@@ -1707,9 +1755,12 @@ LOuter: while (1)
 
     private bool isUpdateTx (in Transaction tx, out uint utxo_idx, out bool is_last)
     {
+        import std.stdio;
+
         if (this.channel_updates.length == 0)
             return false;
 
+        writeln("###### isUpdateTx");
         auto last_update = deserializeFull!(Transaction)(serializeFull(this.channel_updates[$ - 1].update_tx));
         auto last_settle = deserializeFull!(Transaction)(serializeFull(this.channel_updates[$ - 1].settle_tx));
         assert(last_update.inputs.length == 1);
@@ -1720,21 +1771,25 @@ LOuter: while (1)
         auto found_idx = tx.outputs.enumerate.countUntil!((output)
         {
             last_settle.inputs[0].utxo = UTXO.getHash(tx.hashFull(), output.index);
+            writeln("isUpdateTx pre - ", last_settle.inputs[0].utxo);
             return this.engine.execute(output.value.lock,
                         last_settle.inputs[0].unlock, last_settle, last_settle.inputs[0]) is null;
         });
         is_last = found_idx >= 0;
 
+        writeln("isUpdateTx - found: ", found_idx);
         // See if last update can attach to any inputs.
         // if so, this is an older update TX
         if (!is_last)
             found_idx = tx.outputs.enumerate.countUntil!((output)
             {
                 last_update.inputs[0].utxo = UTXO.getHash(tx.hashFull(), output.index);
+                writeln("isUpdateTx - ", last_update.inputs[0].utxo);
                 return this.engine.execute(output.value.lock,
                             last_update.inputs[0].unlock, last_update, last_update.inputs[0]) is null;
             });
         utxo_idx = cast(uint) found_idx;
+        writeln("###### isUpdateTx - found: ", found_idx);
         return is_last || found_idx >= 0;
     }
 
@@ -2267,6 +2322,8 @@ LOuter: while (1)
         multi_sig.output_idx = output_idx;
 
         auto fee_sig = SigPair(this.kp.sign(update_tx.getChallenge()));
+
+        writeln("###### getChallenge IN publishUpdateTx: ", update_tx);
 
         // update input unlocks
         foreach (idx; 0..update_tx.inputs.length)

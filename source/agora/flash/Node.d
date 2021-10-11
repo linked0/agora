@@ -720,6 +720,7 @@ public class FlashNode : FlashControlAPI
         if (!channel.applyChannelUpdate(update.value))
             assert(0);
 
+        writeln("@@@@@@ channel.start openChannel: ", chan_conf.peer_pk);
         channel.start();
         this.channels[chan_conf.chan_id] = channel;
         this.network.addChannel(chan_conf);
@@ -899,6 +900,8 @@ public class FlashNode : FlashControlAPI
     public override Result!SigPair requestUpdateSig (PublicKey sender_pk,
         PublicKey recv_pk, /* in */ Hash chan_id, /* in */ uint seq_id) @trusted
     {
+        writeln("!!!!!! requestUpdateSig - seq_id: ", seq_id,
+            ", address: ", this.conf.key_pair.address);
         auto secret_key = recv_pk in this.managed_keys;
         if (secret_key is null)
             return Result!SigPair(ErrorCode.KeyNotRecognized,
@@ -1267,6 +1270,11 @@ public class FlashNode : FlashControlAPI
             is_private      : is_private,
         };
 
+        writeln("@@@@@@ funding_utxo_hash: ", funding_utxo_hash,
+            "\nfunding_tx_hash: ", funding_tx_hash,
+            "\nfunding_utxo_hash input: ", UTXO.getHash(funding_tx_hash, chan_conf.funding_utxo_idx),
+            "\naddress: ", this.conf.key_pair.address);
+
         auto update = this.listener.onRequestedChannelOpen(chan_conf.funder_pk,
             chan_conf);
         if (update.error != ErrorCode.None)
@@ -1314,6 +1322,8 @@ public class FlashNode : FlashControlAPI
             &this.onPaymentComplete, &this.onUpdateComplete, &this.getFeeUTXOs, this.db);
         if(!channel.applyChannelUpdate(pending_channel.update))
             assert(0);
+
+        writeln("@@@@@@ channel.start handleOpenNewChannel: ", chan_conf.funder_pk);
         channel.start();
         this.channels[chan_conf.chan_id] = channel;
     }

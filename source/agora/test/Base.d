@@ -1694,11 +1694,17 @@ private mixin template TestNodeMixin ()
 
     public override void postTransaction (in Transaction tx) @safe
     {
+        import std.stdio;
+        writeln("###### postTransaction in Base.d");
+
         super.postTransaction(tx);
         const tx_hash = tx.hashFull();
         if (tx_hash !in this.accepted_txs &&
             this.pool.hasTransactionHash(tx_hash))
+        {
+            writeln("###### hasTransactionHash in postTransaction");
             this.accepted_txs.put(tx_hash);
+        }
     }
 
     /***************************************************************************

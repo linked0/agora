@@ -917,6 +917,9 @@ public class FullNode : API
         if (auto reason = this.ledger.acceptTransaction(tx, config.node.double_spent_threshold_pct,
             config.node.min_fee_pct))
         {
+            // import std.stdio;
+            // writeln("postTransaction : ", reason);
+
             this.log.format(
                 this.hasTransactionHash(hashFull(tx)) ? LogLevel.Trace : LogLevel.Info,
                 "Rejected tx. Reason: {}. Tx: {}, txHash: {}",
@@ -924,6 +927,10 @@ public class FullNode : API
             this.tx_stats.increaseMetricBy!"agora_transactions_rejected_total"(1);
             return;
         }
+
+        // import std.stdio;
+        // if (this.ledger.getBlockHeight() >= 7)
+        //     writeln("Accepted postTransaction : ", tx);
 
         log.info("Accepted transaction: {} ({})", prettify(tx), hashFull(tx));
         this.tx_stats.increaseMetricBy!"agora_transactions_accepted_total"(1);

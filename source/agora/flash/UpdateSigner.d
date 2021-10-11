@@ -17,6 +17,7 @@
 
 module agora.flash.UpdateSigner;
 
+import agora.common.Amount;
 import agora.common.Ensure;
 import agora.common.ManagedDatabase;
 import agora.common.Task;
@@ -28,6 +29,7 @@ import agora.crypto.Key;
 import agora.crypto.Schnorr;
 import agora.crypto.Hash;
 import agora.flash.api.FlashAPI;
+import agora.flash.api.FlashListenerAPI;
 import agora.flash.Config;
 import agora.flash.ErrorCode;
 import agora.flash.Scripts;
@@ -41,6 +43,8 @@ import agora.utils.Log;
 
 mixin AddLogger!();
 
+import std.array;
+import std.algorithm;
 import std.conv;
 import std.datetime.systime;
 import std.format;
@@ -73,6 +77,12 @@ public class UpdateSigner
     /// Retry delay algorithm
     private Backoff backoff;
 
+    /// Called when a channel update has been completed.
+    private alias GetFeeUTXOs = FeeUTXOs delegate (ulong tx_size);
+
+    /// Ditto
+    private GetFeeUTXOs getFeeUTXOs;
+
     /***************************************************************************
 
         Constructor
@@ -89,7 +99,7 @@ public class UpdateSigner
 
     public this (FlashConfig flash_conf, ChannelConfig conf, KeyPair kp,
         Point peer_pk, Engine engine, ITaskManager taskman,
-        ManagedDatabase db)
+        GetFeeUTXOs getFeeUTXOs, ManagedDatabase db)
     {
         this.flash_conf = flash_conf;
         this.conf = conf;
@@ -97,6 +107,7 @@ public class UpdateSigner
         this.peer_pk = peer_pk;
         this.engine = engine;
         this.taskman = taskman;
+        this.getFeeUTXOs = getFeeUTXOs;
         this.db = db;
         this.backoff = new Backoff(this.flash_conf.retry_multiplier,
             this.flash_conf.max_retry_delay.total!"msecs".to!uint);
@@ -313,6 +324,11 @@ public class UpdateSigner
         this.is_collecting = true;
         scope (exit) this.is_collecting = false;
 
+        import std.stdio;
+        import agora.utils.PrettyPrinter;
+        writeln("&&&&&& collectSignatures - seq_id: ", seq_id,
+            "\nprev_utxo_hash: ", prev_utxo_hash);
+
         this.pending_update = this.createPendingUpdate(priv_nonce, peer_nonce,
             prev_utxo_hash);
         this.pending_settle = this.createPendingSettle(
@@ -449,6 +465,12 @@ public class UpdateSigner
             multi_update_sig : this.pending_update.multi_sig,
         };
 
+        writeln("&&&&&& UpdatePair:");
+        writeln("seq_id: ", pair.seq_id);
+        writeln("settle sig: ", pair.our_settle_sig);
+        writeln("update sig: ", pair.our_update_sig);
+        writeln("multi update sig: ", pair.multi_update_sig);
+
         return Result!UpdatePair(pair);
     }
 
@@ -567,11 +589,14 @@ public class UpdateSigner
         const uint input_idx = 0; // todo: this should ideally not be hardcoded
         auto settle_tx = createSettleTx(update_utxo_hash, this.conf.settle_time,
             outputs);
+
         const challenge_settle = getSequenceChallenge(settle_tx, this.seq_id,
             input_idx);
 
         const sig = sign(settle_key, settle_pair_pk, nonce_pair_pk,
             priv_nonce.settle.v, challenge_settle);
+
+        writeln("@@@@@@ settle_tx: ", settle_tx, " - sig: ", sig, "\naddress:", this.kp.address);
 
         PendingSettle settle =
         {
@@ -623,10 +648,18 @@ public class UpdateSigner
         if (auto error = this.engine.execute(
             this.pending_update.tx.outputs[0].lock, settle_tx.inputs[0].unlock,
             settle_tx, settle_tx.inputs[0]))
-            return error;
+            {
+                writeln("isInvalidSettleMultiSig: ", error);
+                return error;
+            }
 
         settle.tx = settle_tx;
         return null;
+    }
+
+    public Unlock getSettleUnlock ()
+    {
+        return Unlock.init;
     }
 
     /***************************************************************************
@@ -780,7 +813,7 @@ private mixin template UpdateSignerMetadata ()
     /// Pending signatures for the settlement transaction.
     /// Contains our own settlement signature, which is shared
     /// when the counter-party requests it via `requestSettleSig()`.
-    private PendingSettle pending_settle;
+    public PendingSettle pending_settle;
 
     /// Pending signatures for the update transaction.
     /// Contains our own update signature, which is only shared

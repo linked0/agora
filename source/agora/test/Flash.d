@@ -313,6 +313,9 @@ public class TestFlashNode : FlashNode, TestFlashAPI
     ///
     private void postTransaction (in Transaction tx)
     {
+        import std.stdio;
+        writeln("###### postTransaction in Base.d");
+        
         if (this.allow_publish)
             this.agora_node.postTransaction(tx);
         else
@@ -616,13 +619,16 @@ private TestConf flashTestConf (bool noFee = true)
 }
 
 /// Test unilateral non-collaborative close (funding + update* + settle)
-//version (none)
+// version (none)
 unittest
 {
+    import agora.consensus.validation.Transaction;
     auto conf = flashTestConf(false);
     auto network = makeTestNetwork!FlashNodeFactory(conf);
     scope (exit) network.shutdown();
     scope (failure) network.printLogs();
+
+    b_log = true;
 
     auto alice = network.createFlashNode(WK.Keys.A);
     auto charlie = network.createFlashNode(WK.Keys.C);
@@ -695,7 +701,9 @@ unittest
     // at this point charlie will automatically publish the latest update tx
     // and then a settlement will be published (but only after time lock expires)
     iota(Settle_1_Blocks * 2).each!(idx => network.addBlock(true));
-    network.listener.waitUntilChannelState(chan_id, ChannelState.Closed);
+    // network.listener.waitUntilChannelState(chan_id, ChannelState.Closed);
+
+    b_log = false;
 }
 
 /// Test the settlement timeout branch for the
@@ -703,7 +711,7 @@ unittest
 version (none)
 unittest
 {
-    auto conf = flashTestConf();
+    auto conf = flashTestConf(false);
     auto network = makeTestNetwork!FlashNodeFactory(conf);
     scope (exit) network.shutdown();
     scope (failure) network.printLogs();
