@@ -327,7 +327,8 @@ public class UpdateSigner
         import std.stdio;
         import agora.utils.PrettyPrinter;
         writeln("&&&&&& collectSignatures - seq_id: ", seq_id,
-            "\nprev_utxo_hash: ", prev_utxo_hash);
+            ", [[[", prev_utxo_hash.prettify, "]]]",
+            ", address: ", this.kp.address.prettify);
 
         this.pending_update = this.createPendingUpdate(priv_nonce, peer_nonce,
             prev_utxo_hash);
@@ -465,11 +466,11 @@ public class UpdateSigner
             multi_update_sig : this.pending_update.multi_sig,
         };
 
-        writeln("&&&&&& UpdatePair:");
-        writeln("seq_id: ", pair.seq_id);
-        writeln("settle sig: ", pair.our_settle_sig);
-        writeln("update sig: ", pair.our_update_sig);
-        writeln("multi update sig: ", pair.multi_update_sig);
+        // writeln("&&&&&& UpdatePair:");
+        // writeln("seq_id: ", pair.seq_id);
+        // writeln("settle sig: ", pair.our_settle_sig);
+        // writeln("update sig: ", pair.our_update_sig);
+        // writeln("multi update sig: ", pair.multi_update_sig);
 
         return Result!UpdatePair(pair);
     }
@@ -596,7 +597,10 @@ public class UpdateSigner
         const sig = sign(settle_key, settle_pair_pk, nonce_pair_pk,
             priv_nonce.settle.v, challenge_settle);
 
-        writeln("@@@@@@ settle_tx: ", settle_tx, " - sig: ", sig, "\naddress:", this.kp.address);
+        import agora.utils.PrettyPrinter;
+        writeln("@@@@@@ createPendingSettle settle_tx: ", settle_tx.prettify,
+            " - sig: ", sig.s.toString(PrintMode.Clear),
+            "\naddress:", this.kp.address);
 
         PendingSettle settle =
         {
@@ -607,6 +611,42 @@ public class UpdateSigner
 
         return settle;
     }
+
+    // public Unlock createSettleUnlock (in Transaction settle_tx, uint input_idx,
+    //     Signature peer_sig)
+    // {
+    //     const settle_key = getSettleScalar(this.kp.secret, this.conf.funding_tx_hash,
+    //         this.seq_id);
+    //     const settle_pair_pk = getSettlePk(this.conf.pair_pk,
+    //         this.conf.funding_tx_hash, this.seq_id, this.conf.num_peers);
+    //     const nonce_pair_pk = this.priv_nonce.settle.V + this.peer_nonce.settle;
+
+    //     const challenge_settle = getSequenceChallenge(settle_tx, this.seq_id,
+    //         input_idx);
+
+    //     const sig = sign(settle_key, settle_pair_pk, nonce_pair_pk,
+    //         this.priv_nonce.settle.v, challenge_settle);
+
+    //     const settle_multi_sig = Signature(nonce_pair_pk,
+    //           sig.s + peer_sig.s);
+
+    //     const Unlock settle_unlock = createUnlockSettle(settle_multi_sig,
+    //         this.seq_id);
+
+    //     settle_tx.inputs[0].unlock = settle_unlock;
+
+    //     // note: must always use the execution engine to validate and never
+    //     // try to validate the signatures manually.
+    //     if (auto error = this.engine.execute(
+    //         this.pending_update.tx.outputs[0].lock, settle_tx.inputs[0].unlock,
+    //         settle_tx, settle_tx.inputs[0]))
+    //         {
+    //             writeln("!!!!!! createSettleUnlock: ", error);
+    //             return Unlock;
+    //         }
+
+    //     return settle_unlock;
+    // }
 
     /***************************************************************************
 

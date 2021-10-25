@@ -124,7 +124,9 @@ public string isInvalidReason (
         {
             if (b_log)
             {
-                writeln("###### engine.execute error: ", error);
+                import agora.utils.PrettyPrinter;
+                writeln("###### engine.execute error: ", input.prettify,
+                    "\n", error);
             }
             return error;
         }
@@ -166,8 +168,8 @@ public string isInvalidReason (
             UTXO utxo_value;
             if (auto fail_reason = isInvalidInput(input, utxo_value, sum_unspent))
             {
-                if (b_log) writeln("isInvalidInput: ", fail_reason, ", input: ",
-                    input);
+                // if (b_log) writeln("isInvalidInput: ", fail_reason, ", input: ",
+                //     input);
                 return fail_reason;
             }
 
@@ -224,12 +226,12 @@ public string isInvalidReason (
     {
         scope(failure) assert(0);
         import std.stdio;
-        writeln("======> tx size: ", tx.sizeInBytes(), ", tx: ", tx);
+        // writeln("======> tx size: ", tx.sizeInBytes(), ", tx: ", tx);
         writeln("======> BAD (", ret, ")- height: ", height, " - temp_sum_unspent: ", temp_sum_unspent, ", new_unspect: ", new_unspent);
     }
     else if (b_log)
     {
-        writeln("======> tx size: ", tx.sizeInBytes(), " SUCCEEDED");
+        // writeln("======> tx size: ", tx.sizeInBytes(), " SUCCEEDED");
     }
     return ret;
 }

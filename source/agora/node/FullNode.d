@@ -928,9 +928,12 @@ public class FullNode : API
             return;
         }
 
-        // import std.stdio;
-        // if (this.ledger.getBlockHeight() >= 7)
-        //     writeln("Accepted postTransaction : ", tx);
+        import agora.consensus.validation.Transaction;
+        if (b_log)
+        {
+            import std.stdio;
+            writeln("postTransaction - Accepted postTransaction : ", tx.prettify);
+        }
 
         log.info("Accepted transaction: {} ({})", prettify(tx), hashFull(tx));
         this.tx_stats.increaseMetricBy!"agora_transactions_accepted_total"(1);

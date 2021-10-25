@@ -274,6 +274,10 @@ public Transaction createUpdateTx (in ChannelConfig chan_conf,
         chan_conf.funding_tx_hash, chan_conf.pair_pk, seq_id,
         chan_conf.num_peers);
 
+    // debug {
+    //     import std.stdio;
+    //     writeln("createUpdateTx - chan_conf.capacity: ", chan_conf.capacity);
+    // }
     Transaction update_tx = Transaction(
         [ Input(prev_utxo_hash)] ,
         [ Output(chan_conf.capacity, Lock) ]);

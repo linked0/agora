@@ -645,7 +645,7 @@ public class FlashNode : FlashControlAPI
         /*in*/ ChannelConfig chan_conf, /*in*/ PublicNonce peer_nonce,
         /* in */ Address funder_address) @trusted
     {
-        log.info("openChannel()");
+        log.info("openChannel() - ", chan_conf.peer_pk);
 
         auto secret_key = chan_conf.peer_pk in this.managed_keys;
         if (secret_key is null)
@@ -720,7 +720,6 @@ public class FlashNode : FlashControlAPI
         if (!channel.applyChannelUpdate(update.value))
             assert(0);
 
-        writeln("@@@@@@ channel.start openChannel: ", chan_conf.peer_pk);
         channel.start();
         this.channels[chan_conf.chan_id] = channel;
         this.network.addChannel(chan_conf);
@@ -900,8 +899,6 @@ public class FlashNode : FlashControlAPI
     public override Result!SigPair requestUpdateSig (PublicKey sender_pk,
         PublicKey recv_pk, /* in */ Hash chan_id, /* in */ uint seq_id) @trusted
     {
-        writeln("!!!!!! requestUpdateSig - seq_id: ", seq_id,
-            ", address: ", this.conf.key_pair.address);
         auto secret_key = recv_pk in this.managed_keys;
         if (secret_key is null)
             return Result!SigPair(ErrorCode.KeyNotRecognized,
@@ -1270,10 +1267,14 @@ public class FlashNode : FlashControlAPI
             is_private      : is_private,
         };
 
-        writeln("@@@@@@ funding_utxo_hash: ", funding_utxo_hash,
-            "\nfunding_tx_hash: ", funding_tx_hash,
-            "\nfunding_utxo_hash input: ", UTXO.getHash(funding_tx_hash, chan_conf.funding_utxo_idx),
-            "\naddress: ", this.conf.key_pair.address);
+        import agora.utils.PrettyPrinter;
+        writeln("@@@@@@ funding_utxo_hash: ", funding_utxo_hash.prettify,
+            "\nthis pk: ", this.conf.key_pair.address.prettify,
+            "\npeer: ", PublicKey(recv_pk).prettify,
+            "\nfunding_tx_hash: ", funding_tx_hash.prettify,
+            "\nchan_conf.funding_utxo_idx: ", chan_conf.funding_utxo_idx,
+            "\nfunding_utxo_hash input: ", UTXO.getHash(funding_tx_hash, chan_conf.funding_utxo_idx).prettify,
+            "\naddress: ", this.conf.key_pair.address.prettify);
 
         auto update = this.listener.onRequestedChannelOpen(chan_conf.funder_pk,
             chan_conf);
@@ -1298,7 +1299,7 @@ public class FlashNode : FlashControlAPI
 
         PrivateNonce priv_nonce = genPrivateNonce();
         PublicNonce pub_nonce = priv_nonce.getPublicNonce();
-
+        
         auto result = peer.openChannel(chan_conf, pub_nonce,
             Address(this.conf.addresses_to_register[0]));
         if (result.error != ErrorCode.None)
@@ -1323,7 +1324,6 @@ public class FlashNode : FlashControlAPI
         if(!channel.applyChannelUpdate(pending_channel.update))
             assert(0);
 
-        writeln("@@@@@@ channel.start handleOpenNewChannel: ", chan_conf.funder_pk);
         channel.start();
         this.channels[chan_conf.chan_id] = channel;
     }

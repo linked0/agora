@@ -313,9 +313,6 @@ public class TestFlashNode : FlashNode, TestFlashAPI
     ///
     private void postTransaction (in Transaction tx)
     {
-        import std.stdio;
-        writeln("###### postTransaction in Base.d");
-        
         if (this.allow_publish)
             this.agora_node.postTransaction(tx);
         else
@@ -565,7 +562,7 @@ private class FlashListener : TestFlashListenerAPI
         auto last_height = agora_node.getBlockHeight();
 
         import std.stdio;
-        writeln("amount in getFreeUTXOs: ", amount);
+        // writeln("amount in getFreeUTXOs: ", amount);
 
         FeeUTXOs utxos;
         do
@@ -587,7 +584,7 @@ private class FlashListener : TestFlashListenerAPI
         } while (last_height > 0 && utxos.total_value < amount);
 
         utxos.total_fee = amount;
-        writeln("amount in getFreeUTXOs: ", amount, ", utxos.total_value: ", utxos.total_value);
+        // writeln("amount in getFreeUTXOs: ", amount, ", utxos.total_value: ", utxos.total_value);
 
         return utxos;
     }
@@ -660,35 +657,48 @@ unittest
     // await funding transaction
     network.expectTxExternalization(chan_id);
 
-    writeln("###### height: ", network.clients[0].getBlockHeight());
+    writeln("$$$$$$ expectTxExternalization: ", network.clients[0].getBlockHeight());
 
     // wait for the parties & listener to detect the funding tx
     alice.waitForChannelOpen(WK.Keys.A.address, chan_id);
     charlie.waitForChannelOpen(WK.Keys.C.address, chan_id);
     network.listener.waitUntilChannelState(chan_id, ChannelState.Open);
 
+    writeln("$$$$$$ waitUntilChannelState: ", network.clients[0].getBlockHeight());
+
     auto update_tx = alice.getPublishUpdateIndex(WK.Keys.A.address, chan_id, 0);
 
+    writeln("$$$$$$ getPublishUpdateIndex", network.clients[0].getBlockHeight());
     auto inv_1 = charlie.createNewInvoice(WK.Keys.C.address, Amount(5_000), time_t.max, "payment 1");
     alice.payInvoice(WK.Keys.A.address, inv_1.value);
+
+    writeln("$$$$$$ createNewInvoice WK.Keys.C.address, Amount(5_000): ", network.clients[0].getBlockHeight());
 
     alice.waitForUpdateIndex(WK.Keys.A.address, chan_id, 2);
     charlie.waitForUpdateIndex(WK.Keys.C.address, chan_id, 2);
 
+    writeln("$$$$$$ waitForUpdateIndex: ", network.clients[0].getBlockHeight());
+
     auto inv_2 = charlie.createNewInvoice(WK.Keys.C.address, Amount(1_000), time_t.max, "payment 2");
     alice.payInvoice(WK.Keys.A.address, inv_2.value);
+    writeln("$$$$$$ createNewInvoice(WK.Keys.C.address, Amount(1_000): ", network.clients[0].getBlockHeight());
 
     // need to wait for invoices to be complete before we have the new balance
     // to send in the other direction
     alice.waitForUpdateIndex(WK.Keys.A.address, chan_id, 4);
     charlie.waitForUpdateIndex(WK.Keys.C.address, chan_id, 4);
+    writeln("$$$$$$ waitForUpdateIndex: ", network.clients[0].getBlockHeight());
 
     // note the reverse payment from charlie to alice. Can use this for refunds too.
     auto inv_3 = alice.createNewInvoice(WK.Keys.A.address, Amount(2_000), time_t.max, "payment 3");
     charlie.payInvoice(WK.Keys.C.address, inv_3.value);
 
+    writeln("$$$$$$ createNewInvoice(WK.Keys.A.address, Amount(2_000): ", network.clients[0].getBlockHeight());
+
     alice.waitForUpdateIndex(WK.Keys.A.address, chan_id, 6);
     charlie.waitForUpdateIndex(WK.Keys.C.address, chan_id, 6);
+
+    writeln("$$$$$$ waitForUpdateIndex: ", network.clients[0].getBlockHeight());
 
     // alice is acting bad
     log.info("Alice unilaterally closing the channel..");
@@ -696,11 +706,12 @@ unittest
     network.listener.waitUntilChannelState(chan_id,
         ChannelState.StartedUnilateralClose);
 
-    writeln("###### height: ", network.clients[0].getBlockHeight());
+    writeln("$$$$$$ expectTxExternalization: ", network.clients[0].getBlockHeight());
 
     // at this point charlie will automatically publish the latest update tx
     // and then a settlement will be published (but only after time lock expires)
     iota(Settle_1_Blocks * 2).each!(idx => network.addBlock(true));
+    writeln("$$$$$$ network.addBlock(true): ", network.clients[0].getBlockHeight());
     // network.listener.waitUntilChannelState(chan_id, ChannelState.Closed);
 
     b_log = false;

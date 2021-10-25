@@ -642,6 +642,8 @@ LOuter: while (1)
 
         this.trigger_utxo = UTXO.getHash(update_pair.update_tx.hashFull(), 0);
         this.channel_updates ~= update_pair;
+        import agora.utils.PrettyPrinter;
+        writeln("###### onSetupComplete: ", update_pair.update_tx.prettify);
         this.known_settle_txs.put(update_pair.settle_tx.hashFull());
 
         // this is not technically an error, but it would be very strange
@@ -756,6 +758,7 @@ LOuter: while (1)
         }
         else
         {
+            writeln("###### calling publishUpdateTx -onUpdateTxExternalized");
             this.publishUpdateTx(this.channel_updates[$ - 1]);
         }
     }
@@ -776,57 +779,83 @@ LOuter: while (1)
         // should have been set if state changed to WaitingOnSettlement
         assert(this.update_ext_height != Height(0));
 
+        writeln("###### checkPublishSettlement");
+
         // ready to publish settlement
-        // if (this.height >= this.update_ext_height + this.conf.settle_time)
-        // {
-        //     auto settle_tx = this.channel_updates[$ - 1].settle_tx;
-        //     // point the input to the last update utxo
-        //     settle_tx.inputs[0].utxo = this.last_externalized_update_utxo;
-
-        //     auto settle_input = settle_tx.inputs[0];
-        //     auto settle_ouput = settle_tx.outputs[0];
-
-        //     // calculate fee
-        //     auto max_size = settle_tx.sizeInBytes();
-        //     auto mock_refund_output = Output(Amount.init, this.kp.address);
-        //     max_size += mock_refund_output.sizeInBytes();
-        //     auto utxos = this.getFeeUTXOs(max_size);
-        //     settle_tx.inputs ~= utxos.utxos.map!(hash => Input(hash)).array;
-        //     settle_tx.inputs.sort();
-        //     if (utxos.total_value > 0.coins)
-        //         settle_tx.outputs ~= [Output(utxos.total_value, this.kp.address)];
-        //     settle_tx.outputs.sort();
-
-        //     auto output_idx = settle_tx.outputs.countUntil(settle_ouput);
-        //     auto input_idx = settle_tx.inputs.countUntil(settle_input);
-
-        //     auto multi_sig = this.channel_updates[$ - 1].our_settle_sig.
-        //         serializeFull.deserializeFull!SigPair();
-        //     multi_sig.output_idx = output_idx;
-        //     auto fee_sig = SigPair(this.kp.sign(settle_tx.getChallenge()));
-        //     foreach (idx; 0 .. settle_tx.inputs.length)
-        //         if (idx == input_idx)
-        //             settle_tx.inputs[idx].unlock =
-        //                 this.update_signer.makeUpdateUnlock(multi_sig, channel_updates[$ - 1].seq_id);
-        //         else
-        //             settle_tx.inputs[idx].unlock = genKeyUnlock(fee_sig);
-
-        //     log.info("{}: Publishing last settle tx {}: {}",
-        //         this.own_pk.flashPrettify, this.channel_updates.length,
-        //         settle_tx.hashFull().flashPrettify);
-        //     this.txPublisher(cast()settle_tx);
-        // }
-
         if (this.height >= this.update_ext_height + this.conf.settle_time)
         {
+            import agora.utils.PrettyPrinter;
+            writeln("###### checkPublishSettlement - Publishing last settle tx",
+                "\nthis.height: ", this.height, ", update_ext_height: ",
+                this.update_ext_height,
+                ", conf.settle_time: ", this.conf.settle_time, 
+                "\nsettle_tx: ", this.channel_updates[$ - 1].settle_tx.prettify);
             auto settle_tx = this.channel_updates[$ - 1].settle_tx;
             // point the input to the last update utxo
             settle_tx.inputs[0].utxo = this.last_externalized_update_utxo;
+
+            auto settle_input = settle_tx.inputs[0];
+            auto settle_ouput = settle_tx.outputs[0];
+
+            writeln("###### checkPublishSettlement - 2");
+
+            // calculate fee
+            auto max_size = settle_tx.sizeInBytes();
+            auto mock_refund_output = Output(Amount.init, this.kp.address);
+            max_size += mock_refund_output.sizeInBytes();
+            auto utxos = this.getFeeUTXOs(max_size);
+            settle_tx.inputs ~= utxos.utxos.map!(hash => Input(hash)).array;
+            settle_tx.inputs.sort();
+            if (utxos.total_value > 0.coins)
+                settle_tx.outputs ~= [Output(utxos.total_value, this.kp.address)];
+            settle_tx.outputs.sort();
+
+            writeln("###### checkPublishSettlement - 3");
+
+            auto input_idx = settle_tx.inputs.countUntil(settle_input);
+
+            writeln("###### checkPublishSettlement - 3 - 2 - our_settle_sig\n",
+                this.channel_updates[$ - 1].our_settle_sig.s.toString(PrintMode.Clear));
+            auto multi_sig = this.channel_updates[$ - 1].our_settle_sig;
+
+            // multi_sig.output_idx = output_idx;
+            auto fee_sig = SigPair(this.kp.sign(settle_tx.getChallenge()));
+            writeln("###### checkPublishSettlement - 3 - 4, input_idx: ", input_idx);
+            foreach (idx; 0 .. settle_tx.inputs.length)
+                if (idx == input_idx)
+                {
+                    settle_tx.inputs[idx].unlock =
+                        // settle_tx.inputs[idx].unlock;
+                        createUnlockSettle(multi_sig, channel_updates[$ - 1].seq_id);
+                    writeln("###### checkPublishSettlement - 3 - 5\n",
+                        settle_tx.inputs[idx].prettify);
+                }
+                else
+                {
+                    writeln("###### checkPublishSettlement - 3 - 5 - 2\n",
+                        settle_tx.inputs[idx].prettify);
+                    settle_tx.inputs[idx].unlock = genKeyUnlock(fee_sig);
+                }
+
+            writeln("###### checkPublishSettlement - 4",
+                "\n", settle_tx.prettify);
+
             log.info("{}: Publishing last settle tx {}: {}",
                 this.own_pk.flashPrettify, this.channel_updates.length,
                 settle_tx.hashFull().flashPrettify);
             this.txPublisher(cast()settle_tx);
         }
+
+        // if (this.height >= this.update_ext_height + this.conf.settle_time)
+        // {
+        //     auto settle_tx = this.channel_updates[$ - 1].settle_tx;
+        //     // point the input to the last update utxo
+        //     settle_tx.inputs[0].utxo = this.last_externalized_update_utxo;
+        //     log.info("{}: Publishing last settle tx {}: {}",
+        //         this.own_pk.flashPrettify, this.channel_updates.length,
+        //         settle_tx.hashFull().flashPrettify);
+        //     this.txPublisher(cast()settle_tx);
+        // }
     }
 
     /***************************************************************************
@@ -905,7 +934,6 @@ LOuter: while (1)
                     cur_seq_id, seq_id));
 
         auto sig = this.update_signer.getSettleSig();
-        writeln("$$$$$$ getSettleSig sig: ", sig);
         return sig;
     }
 
@@ -978,6 +1006,8 @@ LOuter: while (1)
         PrivateNonce priv_nonce = genPrivateNonce();
         PublicNonce pub_nonce = priv_nonce.getPublicNonce();
 
+        writeln("%%%%%% checkProposeUpdate - before collectSignatures");
+
         Result!PublicNonce result = Result!PublicNonce(ErrorCode.Unknown);
         const fail_time = Clock.currTime() + this.flash_conf.max_retry_time;
         foreach (attempt; 0 .. uint.max)
@@ -1037,6 +1067,8 @@ LOuter: while (1)
         assert(update_pair_res.error == ErrorCode.None); // todo: handle
         auto update_pair = update_pair_res.value;
         this.known_settle_txs.put(update_pair.settle_tx.hashFull());
+
+        writeln("%%%%%% checkProposeUpdate - after collectSignatures");
 
         log.info("{}: +Update+ Got new pair from {}! Balanced updated: {}",
             this.own_pk.flashPrettify, this.peer_pk.flashPrettify, new_balance);
@@ -1681,24 +1713,30 @@ LOuter: while (1)
         this.height = block.header.height;
 
         import std.stdio;
-        writeln("###### onBlockExternalized - height: ", block.header.height,
-            "\n", block.txs);
+        import agora.utils.PrettyPrinter;
+        auto index = 0;
+        writeln("################## onBlockExternalized - height: ", block.header.height,
+            " ##################");
 
         foreach (tx; block.txs)
         {
-            writeln("###### tx hash: ", tx.hashFull());
+            writeln("tx hash(", index++, "):", tx.hashFull().prettify,
+                "\ntxs: ", tx.prettify);
 
             uint update_utxo_idx;
             bool update_is_last;
             if (tx.hashFull() == this.conf.funding_tx_hash)
             {
-                log.info("{}: Funding tx externalized({}) on height {}",
-                    this.own_pk.flashPrettify, tx.hashFull().flashPrettify, block.header.height);
+                // writeln("###### calling onFundingTxExternalized",
+                //     "\nfunding_tx_hash: ", this.conf.funding_tx_hash);
+                // log.info("{}: Funding tx externalized({}) on height {}",
+                    // this.own_pk.flashPrettify, tx.hashFull().flashPrettify, block.header.height);
                 this.onFundingTxExternalized(tx, block.header.height);
             }
             else
             if (this.isClosingTx(tx)) // always check for closing TX before update TX
             {
+                writeln("###### calling onCloseTxExternalized");
                 log.info("{}: Close tx externalized({}) on height {}",
                     this.own_pk.flashPrettify, tx.hashFull().flashPrettify, block.header.height);
                 this.onCloseTxExternalized(tx);
@@ -1706,6 +1744,7 @@ LOuter: while (1)
             else
             if (this.isUpdateTx(tx, update_utxo_idx, update_is_last)) // always check for update TX before settle TX
             {
+                writeln("###### calling onUpdateTxExternalized");
                 log.info("{}: Update tx externalized({}) on height {}",
                     this.own_pk.flashPrettify, tx.hashFull().flashPrettify, block.header.height);
                 writeln("onBlockExternalized - update_utxo_idx: ", update_utxo_idx);
@@ -1714,6 +1753,7 @@ LOuter: while (1)
             else
             if (this.isSettleTx(tx))
             {
+                writeln("###### calling onSettleTxExternalized");
                 log.info("{}: Settle tx externalized({}) on height {}",
                     this.own_pk.flashPrettify, tx.hashFull().flashPrettify, block.header.height);
                 this.onSettleTxExternalized(tx);
@@ -1756,11 +1796,11 @@ LOuter: while (1)
     private bool isUpdateTx (in Transaction tx, out uint utxo_idx, out bool is_last)
     {
         import std.stdio;
+        import agora.utils.PrettyPrinter;
 
         if (this.channel_updates.length == 0)
             return false;
 
-        writeln("###### isUpdateTx");
         auto last_update = deserializeFull!(Transaction)(serializeFull(this.channel_updates[$ - 1].update_tx));
         auto last_settle = deserializeFull!(Transaction)(serializeFull(this.channel_updates[$ - 1].settle_tx));
         assert(last_update.inputs.length == 1);
@@ -1771,25 +1811,24 @@ LOuter: while (1)
         auto found_idx = tx.outputs.enumerate.countUntil!((output)
         {
             last_settle.inputs[0].utxo = UTXO.getHash(tx.hashFull(), output.index);
-            writeln("isUpdateTx pre - ", last_settle.inputs[0].utxo);
+            // writeln("isUpdateTx pre - ", last_settle.inputs[0].utxo.prettify);
             return this.engine.execute(output.value.lock,
                         last_settle.inputs[0].unlock, last_settle, last_settle.inputs[0]) is null;
         });
         is_last = found_idx >= 0;
 
-        writeln("isUpdateTx - found: ", found_idx);
         // See if last update can attach to any inputs.
         // if so, this is an older update TX
         if (!is_last)
             found_idx = tx.outputs.enumerate.countUntil!((output)
             {
                 last_update.inputs[0].utxo = UTXO.getHash(tx.hashFull(), output.index);
-                writeln("isUpdateTx - ", last_update.inputs[0].utxo);
+                // writeln("isUpdateTx - ", last_update.inputs[0].utxo);
                 return this.engine.execute(output.value.lock,
                             last_update.inputs[0].unlock, last_update, last_update.inputs[0]) is null;
             });
         utxo_idx = cast(uint) found_idx;
-        writeln("###### isUpdateTx - found: ", found_idx);
+        // writeln("###### isUpdateTx - found: ", found_idx);
         return is_last || found_idx >= 0;
     }
 
@@ -1900,6 +1939,7 @@ LOuter: while (1)
         this.taskman.setTimer(100.msecs,
         {
             // publish trigger tx. onUpdateTxExternalized() will handle the rest.
+            writeln("###### calling publishUpdateTx -beginUnilateralClose");
             this.publishUpdateTx(this.channel_updates[0]);
             this.onChannelNotify(this.own_pk, this.conf.chan_id,
                 ChannelState.StartedUnilateralClose, ErrorCode.None);
@@ -2296,6 +2336,12 @@ LOuter: while (1)
         if (this.last_externalized_update_utxo != Hash.init && update.seq_id != 0)
             update_tx.inputs[0].utxo = this.last_externalized_update_utxo;
 
+        import agora.utils.PrettyPrinter;
+        writeln("###### publishUpdateTx : ",
+            "\n", update_tx.prettify,
+            "\nindex 0 :", UTXO.getHash(update_tx.hashFull(), 0).prettify,
+            "\nindex 1 :", UTXO.getHash(update_tx.hashFull(), 1).prettify);
+
         auto update_input = update_tx.inputs[0];
         auto update_ouput = update_tx.outputs[0];
 
@@ -2323,7 +2369,8 @@ LOuter: while (1)
 
         auto fee_sig = SigPair(this.kp.sign(update_tx.getChallenge()));
 
-        writeln("###### getChallenge IN publishUpdateTx: ", update_tx);
+        import agora.utils.PrettyPrinter;
+        writeln("###### getChallenge IN publishUpdateTx: ", update_tx.prettify);
 
         // update input unlocks
         foreach (idx; 0..update_tx.inputs.length)
@@ -2336,7 +2383,12 @@ LOuter: while (1)
             this.own_pk.flashPrettify, update.seq_id, update_tx.hashFull().flashPrettify);
 
         import agora.utils.PrettyPrinter;
-        writeln("###### txPublisher calling publishUpdateTx: ", this.kp.address.prettify());
+        writeln("###### txPublisher calling publishUpdateTx output_idx: ", output_idx, 
+            " - ", this.kp.address.prettify,
+            "\nupdate_utxo_hash  : ", UTXO.getHash(update_tx.hashFull(), output_idx).prettify,
+            "\nupdate_utxo_hash inputs[0]: ", update_tx.inputs[0].prettify,
+            "\nupdate_utxo_hash inputs[1]: ", update_tx.inputs[1].prettify,
+            "\nupdate_utxo_hash getHash: ", UTXO.getHash(update_tx.hashFull(), 0).prettify);
         this.txPublisher(update_tx);
         return update_tx;
     }
@@ -2363,6 +2415,7 @@ LOuter: while (1)
             this.taskman.wait(100.msecs);
 
         assert(index < this.channel_updates.length);
+        writeln("###### calling publishUpdateTx -getPublishUpdateIndex");
         return this.publishUpdateTx(this.channel_updates[index]);
     }
 
