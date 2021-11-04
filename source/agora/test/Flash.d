@@ -65,6 +65,9 @@ public interface TestFlashListenerAPI : FlashListenerAPI
     /// wait until we get a notification about the given channel state,
     /// and return any associated error codes
     ErrorCode waitUntilChannelState (Hash, ChannelState, PublicKey node = PublicKey.init);
+
+    /// set fee per byte rate to be paid for the tx
+    void setEstimatedTxFee(in Amount min_fee);
 }
 
 /// In addition to the Flash APIs, we provide methods for conditional waits
@@ -402,6 +405,7 @@ public class FlashNodeFactory : TestAPIManager
     {
         auto api = RemoteAPI!TestFlashListenerAPI.spawn!Listener(
             &this.registry, this.nodes[0].address, 5.seconds);
+        api.setEstimatedTxFee(this.test_conf.consensus.min_fee);
         this.registry.register(Address(address).host, api.listener());
         this.listener_addresses ~= address;
         this.listener_nodes ~= api;
@@ -482,6 +486,7 @@ private class FlashListener : TestFlashListenerAPI
     ErrorCode[Invoice] invoices;
     LocalRestTaskManager taskman;
     FullNodeAPI agora_node;
+    Amount estimated_tx_fee;
 
     public this (AnyRegistry* registry, string agora_address)
     {
@@ -585,21 +590,28 @@ private class FlashListener : TestFlashListenerAPI
         return utxos;
     }
 
+    public void setEstimatedTxFee(in Amount fee)
+    {
+        this.estimated_tx_fee = fee;
+    }
+
     public Amount getEstimatedTxFee ()
     {
-        return Amount(1);
+        return this.estimated_tx_fee;
     }
 }
 
-private TestConf flashTestConf ()
+private TestConf flashTestConf (bool noFee = true)
 {
     import agora.node.Config;
 
     TestConf conf;
     conf.consensus.quorum_threshold = 100;
-    // TODO: remove this line when fees are handled
-    conf.consensus.min_fee = Amount(0);
-    conf.node.min_fee_pct = 0;
+    if (noFee)
+    {
+        conf.consensus.min_fee = Amount(1);
+        conf.node.min_fee_pct = 0;
+    }
     conf.event_handlers = [
         EventHandlerConfig(HandlerType.BlockExternalized, ["http://"~WK.Keys.A.address.to!string()]),
         EventHandlerConfig(HandlerType.BlockExternalized, ["http://"~WK.Keys.C.address.to!string()]),
@@ -607,6 +619,212 @@ private TestConf flashTestConf ()
         EventHandlerConfig(HandlerType.BlockExternalized, ["http://"~WK.Keys.E.address.to!string()])
     ];
     return conf;
+}
+
+/// Test unilateral non-collaborative close (funding + update* + settle)
+/// With some amount of tx fee
+unittest
+{
+    auto conf = flashTestConf(false);
+    auto network = makeTestNetwork!FlashNodeFactory(conf);
+    scope (exit) network.shutdown();
+    scope (failure) network.printLogs();
+
+    auto alice = network.createFlashNode(WK.Keys.A);
+    auto charlie = network.createFlashNode(WK.Keys.C);
+
+    network.start();
+    network.waitForDiscovery();
+
+    // split the genesis funds into WK.Keys[0] .. WK.Keys[7]
+    auto txs = genesisSpendable().take(8).enumerate()
+        .map!(en => en.value.refund(WK.Keys[en.index].address).sign())
+        .array();
+
+    txs.each!(tx => network.postAndEnsureTxInPool(tx));
+    network.expectHeightAndPreImg(Height(1), network.blocks[0].header);
+
+    // 0 blocks settle time after trigger tx is published (unsafe)
+    const Settle_1_Blocks = 3;
+    //const Settle_10_Blocks = 10;
+
+    // the utxo the funding tx will spend (only relevant to the funder)
+    const utxo = UTXO(0, txs[0].outputs[0]);
+    const utxo_hash = UTXO.getHash(hashFull(txs[0]), 0);
+    const chan_id_res = alice.openNewChannel(utxo, utxo_hash, Amount(10_000),
+        Settle_1_Blocks, WK.Keys.C.address, false, Address("http://"~to!string(WK.Keys.C.address))); // TODO common registry localrest
+    assert(chan_id_res.error == ErrorCode.None, chan_id_res.message);
+    const chan_id = chan_id_res.value;
+    network.listener.waitUntilChannelState(chan_id, ChannelState.WaitingForFunding);
+
+    // await funding transaction
+    network.expectTxExternalization(chan_id);
+
+    // wait for the parties & listener to detect the funding tx
+    alice.waitForChannelOpen(WK.Keys.A.address, chan_id);
+    charlie.waitForChannelOpen(WK.Keys.C.address, chan_id);
+    network.listener.waitUntilChannelState(chan_id, ChannelState.Open);
+
+    auto update_tx = alice.getPublishUpdateIndex(WK.Keys.A.address, chan_id, 0);
+
+    auto inv_1 = charlie.createNewInvoice(WK.Keys.C.address, Amount(5_000), time_t.max, "payment 1");
+    alice.payInvoice(WK.Keys.A.address, inv_1.value);
+
+    alice.waitForUpdateIndex(WK.Keys.A.address, chan_id, 2);
+    charlie.waitForUpdateIndex(WK.Keys.C.address, chan_id, 2);
+
+    auto inv_2 = charlie.createNewInvoice(WK.Keys.C.address, Amount(1_000), time_t.max, "payment 2");
+    alice.payInvoice(WK.Keys.A.address, inv_2.value);
+
+    // need to wait for invoices to be complete before we have the new balance
+    // to send in the other direction
+    alice.waitForUpdateIndex(WK.Keys.A.address, chan_id, 4);
+    charlie.waitForUpdateIndex(WK.Keys.C.address, chan_id, 4);
+
+    // note the reverse payment from charlie to alice. Can use this for refunds too.
+    auto inv_3 = alice.createNewInvoice(WK.Keys.A.address, Amount(2_000), time_t.max, "payment 3");
+    charlie.payInvoice(WK.Keys.C.address, inv_3.value);
+
+    alice.waitForUpdateIndex(WK.Keys.A.address, chan_id, 6);
+    charlie.waitForUpdateIndex(WK.Keys.C.address, chan_id, 6);
+
+    // alice is acting bad
+    log.info("Alice unilaterally closing the channel..");
+    network.expectTxExternalization(update_tx);
+    network.listener.waitUntilChannelState(chan_id,
+        ChannelState.StartedUnilateralClose);
+
+    // at this point charlie will automatically publish the latest update tx
+    // and then a settlement will be published (but only after time lock expires)
+    iota(Settle_1_Blocks * 2).each!(idx => network.addBlock(true));
+    network.listener.waitUntilChannelState(chan_id, ChannelState.Closed);
+}
+
+/// Test indirect channel payments
+/// With some amount of tx fee
+version (none)
+unittest
+{
+    auto conf = flashTestConf(false);
+    auto network = makeTestNetwork!FlashNodeFactory(conf);
+    scope (exit) network.shutdown();
+    scope (failure) network.printLogs();
+
+    auto alice = network.createFlashNode(WK.Keys.A);
+    auto charlie = network.createFlashNode(WK.Keys.C);
+    auto diego = network.createFlashNode(WK.Keys.D);
+
+    network.start();
+    network.waitForDiscovery();
+
+    // split the genesis funds into WK.Keys[0] .. WK.Keys[7]
+    auto txs = genesisSpendable().take(8).enumerate()
+        .map!(en => en.value.refund(WK.Keys[en.index].address).sign())
+        .array();
+
+    txs.each!(tx => network.postAndEnsureTxInPool(tx));
+    network.expectHeightAndPreImg(Height(1), network.blocks[0].header);
+
+    // 0 blocks settle time after trigger tx is published (unsafe)
+    const Settle_1_Blocks = 0;
+    //const Settle_10_Blocks = 10;
+
+    /+ OPEN ALICE => CHARLIE CHANNEL +/
+    /+++++++++++++++++++++++++++++++++++++++++++++/
+    // the utxo the funding tx will spend (only relevant to the funder)
+    const alice_utxo = UTXO(0, txs[0].outputs[0]);
+    const alice_utxo_hash = UTXO.getHash(hashFull(txs[0]), 0);
+    const alice_charlie_chan_id_res = alice.openNewChannel(alice_utxo, alice_utxo_hash,
+        Amount(10_000), Settle_1_Blocks, WK.Keys.C.address, false, Address("http://"~to!string(WK.Keys.C.address)));
+    assert(alice_charlie_chan_id_res.error == ErrorCode.None,
+        alice_charlie_chan_id_res.message);
+    const alice_charlie_chan_id = alice_charlie_chan_id_res.value;
+    log.info("Alice charlie channel ID: {}", alice_charlie_chan_id);
+    network.listener.waitUntilChannelState(alice_charlie_chan_id,
+        ChannelState.WaitingForFunding);
+
+    // await alice & charlie channel funding transaction
+    network.expectTxExternalization(alice_charlie_chan_id);
+
+    // wait for the parties to detect the funding tx
+    alice.waitForChannelOpen(WK.Keys.A.address, alice_charlie_chan_id);
+    charlie.waitForChannelOpen(WK.Keys.C.address, alice_charlie_chan_id);
+    network.listener.waitUntilChannelState(alice_charlie_chan_id, ChannelState.Open);
+
+    /+++++++++++++++++++++++++++++++++++++++++++++/
+
+    /+ OPEN CHARLIE => DIEGO CHANNEL +/
+    /+++++++++++++++++++++++++++++++++++++++++++++/
+    // the utxo the funding tx will spend (only relevant to the funder)
+    const charlie_utxo = UTXO(0, txs[1].outputs[0]);
+    const charlie_utxo_hash = UTXO.getHash(hashFull(txs[1]), 0);
+    const charlie_diego_chan_id_res = charlie.openNewChannel(charlie_utxo, charlie_utxo_hash,
+        Amount(3_000), Settle_1_Blocks, WK.Keys.D.address, false, Address("http://"~to!string(WK.Keys.D.address)));
+    assert(charlie_diego_chan_id_res.error == ErrorCode.None,
+        charlie_diego_chan_id_res.message);
+    const charlie_diego_chan_id = charlie_diego_chan_id_res.value;
+    log.info("Charlie Diego channel ID: {}", charlie_diego_chan_id);
+    network.listener.waitUntilChannelState(charlie_diego_chan_id,
+        ChannelState.WaitingForFunding);
+
+    // await charlie & charlie channel funding transaction
+    network.expectTxExternalization(charlie_diego_chan_id);
+
+    // wait for the parties to detect the funding tx
+    charlie.waitForChannelOpen(WK.Keys.C.address, charlie_diego_chan_id);
+    diego.waitForChannelOpen(WK.Keys.D.address, charlie_diego_chan_id);
+    network.listener.waitUntilChannelState(charlie_diego_chan_id, ChannelState.Open);
+    /+++++++++++++++++++++++++++++++++++++++++++++/
+
+    // also wait for all parties to discover other channels on the network
+    alice.waitForChannelDiscovery(charlie_diego_chan_id);
+    diego.waitForChannelDiscovery(alice_charlie_chan_id);
+
+    // begin off-chain transactions
+    auto inv_1 = diego.createNewInvoice(WK.Keys.D.address, Amount(2_000),
+        time_t.max, "payment 1");
+
+    // here we assume charlie sent the invoice to alice through some means,
+    // e.g. QR code. Alice scans it and proposes the payment.
+    // it has a direct channel to charlie so it uses it.
+    alice.payInvoice(WK.Keys.A.address, inv_1.value);
+    auto inv_res = network.listener.waitUntilNotified(inv_1.value);
+    assert(inv_res == ErrorCode.None, format("Couldn't pay invoice: %s", inv_res));
+
+    // wait for payment + folding update indices
+    alice.waitForUpdateIndex(WK.Keys.A.address, alice_charlie_chan_id, 2);
+    charlie.waitForUpdateIndex(WK.Keys.C.address, alice_charlie_chan_id, 2);
+    charlie.waitForUpdateIndex(WK.Keys.C.address, charlie_diego_chan_id, 2);
+    diego.waitForUpdateIndex(WK.Keys.D.address, charlie_diego_chan_id, 2);
+
+    //
+    log.info("Beginning charlie => diego collaborative close..");
+    assert(charlie.beginCollaborativeClose(WK.Keys.C.address, charlie_diego_chan_id).error
+        == ErrorCode.None);
+    network.listener.waitUntilChannelState(charlie_diego_chan_id,
+        ChannelState.StartedCollaborativeClose);
+    auto close_tx = charlie.getClosingTx(WK.Keys.C.address,
+        charlie_diego_chan_id);
+    network.expectTxExternalization(close_tx);
+    log.info("charlie closing tx: {}", close_tx);
+    network.listener.waitUntilChannelState(charlie_diego_chan_id,
+        ChannelState.Closed);
+
+    // can't close twice
+    assert(charlie.beginCollaborativeClose(WK.Keys.C.address, charlie_diego_chan_id).error
+        == ErrorCode.ChannelNotOpen);
+
+    log.info("Beginning alice => charlie collaborative close..");
+    assert(alice.beginCollaborativeClose(WK.Keys.A.address,
+        alice_charlie_chan_id).error == ErrorCode.None);
+    network.listener.waitUntilChannelState(alice_charlie_chan_id,
+        ChannelState.StartedCollaborativeClose);
+    close_tx = alice.getClosingTx(WK.Keys.A.address,
+        alice_charlie_chan_id);
+    network.expectTxExternalization(close_tx);
+    log.info("alice closing tx: {}", close_tx);
+    network.listener.waitUntilChannelState(alice_charlie_chan_id,
+        ChannelState.Closed);
 }
 
 /// Test unilateral non-collaborative close (funding + update* + settle)
