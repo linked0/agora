@@ -40,6 +40,7 @@ import agora.flash.Types;
 import agora.script.Engine;
 import agora.script.Lock;
 import agora.script.Script;
+import agora.script.Signature;
 import agora.serialization.Serializer;
 import agora.test.Base;
 import agora.utils.Log;
@@ -569,12 +570,17 @@ private class FlashListener : TestFlashListenerAPI
             foreach (idx, output; tx.outputs)
                 if (output.address() == pk)
                 {
-                    utxos.utxos ~= UTXO.getHash(tx.hashFull(), idx);
+                    auto utxo = UTXO.getHash(tx.hashFull(), idx);
+                    utxos.utxos ~= utxo;
                     utxos.total_value += output.value;
+                    auto per_byte = this.getEstimatedTxFee();
+                    per_byte.mul(Input(utxo, genKeyUnlock(SigPair.init)).sizeInBytes());
+                    amount.add(per_byte);
                 }
 
             last_height--;
         } while (last_height > 0 && utxos.total_value < amount);
+        utxos.total_fee = amount;
 
         return utxos;
     }

@@ -2233,7 +2233,14 @@ LOuter: while (1)
         auto update_input = update_tx.inputs[0];
         auto update_ouput = update_tx.outputs[0];
 
-        auto utxos = this.getFeeUTXOs(update_tx.sizeInBytes());
+        // calculate fee
+        auto max_size = update_tx.sizeInBytes();
+        auto mock_refund_output = Output(Amount.init, this.own_pk);
+        max_size += mock_refund_output.sizeInBytes();
+        auto mock_update_unlock = this.update_signer.makeUpdateUnlock(SigPair.init, update.seq_id);
+        max_size += mock_update_unlock.sizeInBytes();
+        auto utxos = this.getFeeUTXOs(max_size);
+
         update_tx.inputs ~= utxos.utxos.map!(hash => Input(hash)).array;
         update_tx.inputs.sort();
 

@@ -43,6 +43,7 @@ import agora.flash.Scripts;
 import agora.flash.Types;
 import agora.network.Manager;
 import agora.script.Engine;
+import agora.script.Lock;
 import agora.script.Signature;
 import agora.serialization.Serializer;
 import agora.utils.InetUtils;
@@ -1418,8 +1419,15 @@ public class FlashNode : FlashControlAPI
             return FeeUTXOs.init;
         // Always pay with the node key
         auto utxos = this.listener.getFeeUTXOs(this.conf.key_pair.address, per_byte);
+
+        // calculate a expected fee for checking the fee is correct
+        per_byte = this.listener.getEstimatedTxFee();
+        utxos.utxos.each!(hash =>
+            tx_size += Input(hash, genKeyUnlock(SigPair.init)).sizeInBytes());
+        per_byte.mul(tx_size);
+
         // reuse total_value as refund amount
-        if (!utxos.total_value.sub(per_byte))
+        if (!utxos.total_value.sub(utxos.total_fee) || per_byte != utxos.total_fee)
             utxos.total_value = Amount(0);
         return utxos;
     }
