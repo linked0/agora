@@ -777,6 +777,38 @@ LOuter: while (1)
             auto settle_tx = this.channel_updates[$ - 1].settle_tx;
             // point the input to the last update utxo
             settle_tx.inputs[0].utxo = this.last_externalized_update_utxo;
+            auto settle_input = settle_tx.inputs[0];
+            auto settle_output = settle_tx.outputs[0];
+
+            // calculate fee
+            auto max_size = settle_tx.sizeInBytes();
+            auto mock_refund_output = Output(Amount.init, this.kp.address);
+            max_size += mock_refund_output.sizeInBytes();
+            auto utxos = this.getFeeUTXOs(max_size);
+            settle_tx.inputs ~= utxos.utxos.map!(hash => Input(hash)).array;
+            settle_tx.inputs.sort();
+            if (utxos.total_value > 0.coins)
+                settle_tx.outputs ~= [Output(utxos.total_value, this.kp.address)];
+            settle_tx.outputs.sort();
+            auto input_idx = settle_tx.inputs.countUntil(settle_input);
+            auto output_idx = settle_tx.outputs.countUntil(settle_output);
+
+            auto multi_sig = this.channel_updates[$ - 1].multi_settle_sig.
+                serializeFull.deserializeFull!SigPair();
+            multi_sig.output_idx = output_idx;
+
+            auto fee_sig = SigPair(this.kp.sign(settle_tx.getChallenge()));
+            foreach (idx; 0 .. settle_tx.inputs.length)
+            {
+                import std.stdio;
+                import agora.utils.PrettyPrinter;
+                if (idx == input_idx)
+                    settle_tx.inputs[idx].unlock = createUnlockSettle(
+                        multi_sig, channel_updates[$ - 1].seq_id);
+                else
+                    settle_tx.inputs[idx].unlock = genKeyUnlock(fee_sig);
+            }
+
             log.info("{}: Publishing last settle tx {}: {}",
                 this.own_pk.flashPrettify, this.channel_updates.length,
                 settle_tx.hashFull().flashPrettify);
@@ -848,14 +880,14 @@ LOuter: while (1)
 
     ***************************************************************************/
 
-    public Result!Signature onRequestSettleSig (in uint seq_id)
+    public Result!SigPair onRequestSettleSig (in uint seq_id)
     {
         if (seq_id < this.channel_updates.length)
-            return Result!Signature(this.channel_updates[seq_id].our_settle_sig);
+            return Result!SigPair(this.channel_updates[seq_id].our_settle_sig);
 
         const cur_seq_id = this.update_signer.getSeqID();
         if (seq_id != cur_seq_id)
-            return Result!Signature(ErrorCode.InvalidSequenceID,
+            return Result!SigPair(ErrorCode.InvalidSequenceID,
                 format("onRequestSettleSig: expected seq_id: %s. Got: %s",
                     cur_seq_id, seq_id));
 
