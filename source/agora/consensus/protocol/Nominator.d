@@ -79,7 +79,7 @@ public extern (C++) class Nominator : SCPDriver
     protected immutable(ConsensusParams) params;
 
     /// Clock instance
-    private Clock clock;
+    protected Clock clock;
 
     /// SCP instance
     protected SCP* scp;
@@ -106,10 +106,10 @@ public extern (C++) class Nominator : SCPDriver
     private ITimer[TimerType.max + 1] active_timers;
 
     /// Whether we're in the asynchronous stage of nominating
-    private bool is_nominating;
+    protected bool is_nominating;
 
     /// Last height that we finished the nomination round
-    private Height last_confirmed_height;
+    protected Height last_confirmed_height;
 
     /// Periodic nomination timer. It runs every second and checks the clock
     /// time to see if it's time to start nominating. We do not use the

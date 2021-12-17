@@ -35,8 +35,81 @@ extern (D):
         const(QuorumConfig)[NodeID] quorums) nothrow @safe
     {
         scope(failure) assert (0);
+        writeln("setQuorumConfig: ", this.ledger.getBlockHeight());
         this.checkNominate();
         super.setQuorumConfig(node_id, quorums);
+    }
+
+    protected override void checkNominate () @safe
+    {
+        import std.stdio;
+        import agora.consensus.protocol.Data;
+        import agora.utils.PrettyPrinter;
+
+        const slot_idx = this.ledger.getBlockHeight() + 1;
+        // are we done nominating this round
+        if (this.last_confirmed_height >= slot_idx)
+        {
+            this.log.trace(
+                "checkNominate(): Not nominating because we already confirmed ({} >= {})",
+                this.last_confirmed_height, slot_idx);
+            writeln("checkNominate ", __LINE__);
+            return;
+        }
+
+        const cur_time = this.clock.networkTime();
+        const genesis_timestamp = this.params.GenesisTimestamp;
+
+        if (cur_time < genesis_timestamp)
+        {
+            this.log.error(
+                "Clock is out of sync: {} (Current) < {} (Genesis)",
+                cur_time, genesis_timestamp);
+                writeln("checkNominate ", __LINE__);
+            return;
+        }
+
+        const next_nomination = this.getExpectedBlockTime();
+        if (cur_time < next_nomination)
+        {
+            this.log.trace(
+                "checkNominate(): Too early to nominate (current: {}, next: {})",
+                cur_time, next_nomination);
+                writeln("checkNominate ", __LINE__);
+            return;
+        }
+
+        if (slot_idx > 1) // Genesis block is not signed
+        {
+            auto last_block = this.ledger.getLastBlock();
+            auto signed = last_block.header.validators;
+            if (signed.setCount <= signed.count() / 2)
+            {
+                this.log.trace(
+                    "checkNominate(): Require more than half signed last block, signed={}",
+                    signed);
+                    writeln("checkNominate ", __LINE__);
+                return;
+            }
+        }
+
+        ConsensusData data;
+        // `prepareNomintingSet` will log something if it returns `false`
+        if (!this.prepareNominatingSet(data)) {
+            writeln("checkNominate ", __LINE__);
+            return;
+        }
+
+        if (!this.is_nominating)
+            this.initial_missing_validators = data.missing_validators;
+
+        log.info("Nominating {} at {}", data.prettify, cur_time);
+        this.is_nominating = true;
+        writeln("checkNominate ", __LINE__);
+
+        // note: we are not passing the previous tx set as we don't really
+        // need it at this point (might later be necessary for chain upgrades)
+        this.nominate(slot_idx, data);
     }
 }
 
