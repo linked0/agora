@@ -149,6 +149,9 @@ public class NetworkClient
     /// Gossip delay
     private enum GossipDelay = 10.msecs;
 
+    /// Last gossiped pre-image
+    private PreImageInfo[Hash] last_preimages;
+
     /***************************************************************************
 
         Constructor.
@@ -204,6 +207,8 @@ public class NetworkClient
     /// Handle an outgoing gossip event
     private void handleGossip (GossipEvent event) nothrow
     {
+        import std.stdio;
+        scope(failure) assert(0);
         switch (event.type) with (GossipType)
         {
         case Tx:
@@ -223,7 +228,28 @@ public class NetworkClient
             break;
 
         case Preimage:
-            this.attemptRequest!(API.postPreimage, Throw.No)(event.preimage);
+            // this.attemptRequest!(API.postPreimage, Throw.No)(event.preimage);
+            import agora.utils.PrettyPrinter;
+            if (event.preimage.utxo in this.last_preimages &&
+                event.preimage.height <= this.last_preimages[event.preimage.utxo].height)
+            {
+                writeln(format!"pre-image height is less than last - pre-image: %s, address: %s, cur: %s, last: %s"(
+                    event.preimage.utxo.prettify, this.connections[0].address.url[0..20],
+                    this.last_preimages[event.preimage.utxo].height, event.preimage.height));
+            }
+            else if (this.attemptRequest!(API.postPreimage, Throw.No)(event.preimage))
+            {
+                Height cur_height;
+                if (event.preimage.utxo in this.last_preimages)
+                    cur_height = this.last_preimages[event.preimage.utxo].height;
+                else
+                    cur_height = 0;
+
+                writeln(format!"pre-image posted - pre-image: %s, address: %s, cur: %s, last: %s"(
+                    event.preimage.utxo.prettify, this.connections[0].address.url[0..20],
+                    cur_height, event.preimage.height));
+                this.last_preimages[event.preimage.utxo] = event.preimage;
+            }
             break;
 
         default:

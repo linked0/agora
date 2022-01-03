@@ -31,7 +31,7 @@ public class NoActivePINode : TestValidatorNode
 
     /// To be extra sure, we also disable receiving a pre-image
     /// so that the node may gossip them
-    public override void postPreimage (in PreImageInfo preimage) @safe {}
+    public override bool postPreimage (in PreImageInfo preimage) @safe {return true;}
 }
 
 unittest

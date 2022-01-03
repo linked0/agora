@@ -656,6 +656,9 @@ public class TestAPIManager
         this.test_start_time = test_start_time;
         this.initial_time = test_start_time;
         this.registry.initialize();
+
+        writeln("block inteval: ",
+            this.test_conf.consensus.block_interval.total!"seconds");
     }
 
     /***************************************************************************
@@ -2009,6 +2012,9 @@ public struct TestConf
     /// Matches the eponymous field in the `validator` section.
     public Duration preimage_catchup_interval = 1.seconds;
 
+    // How often we should check for pre-images to reveal
+    public Duration preimage_reveal_interval = 1.seconds;
+
     /// max failed requests before a node is banned
     /// Matches the eponymous field in the `banman` section.
     public size_t max_failed_requests = 100;
@@ -2172,7 +2178,7 @@ public APIManager makeTestNetwork (APIManager : TestAPIManager = TestAPIManager)
             registry_address : "http://name.registry",
             recurring_enrollment : test_conf.recurring_enrollment,
             name_registration_interval : 10.seconds,
-            preimage_reveal_interval : 1.seconds,  // check revealing frequently
+            preimage_reveal_interval : test_conf.preimage_reveal_interval,  // check revealing frequently
             nomination_interval: 100.msecs,
             preimage_catchup_interval: test_conf.preimage_catchup_interval,
             cycle_seed : cycle_seed,

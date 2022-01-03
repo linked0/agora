@@ -308,7 +308,7 @@ public interface API
 
     ***************************************************************************/
 
-    public void postPreimage (in PreImageInfo preimage);
+    public bool postPreimage (in PreImageInfo preimage);
 
     /***************************************************************************
 

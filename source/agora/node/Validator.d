@@ -217,6 +217,8 @@ public class Validator : FullNode, API
         super.start();
 
         this.clock.startSyncing();
+        import std.stdio;
+        writeln("preimage_reveal_interval: ", this.config.validator.preimage_reveal_interval);
         this.timers ~= this.taskman.setTimer(
             this.config.validator.preimage_reveal_interval,
             &this.onPreImageRevealTimer, Periodic.Yes);

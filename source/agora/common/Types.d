@@ -48,6 +48,7 @@ public struct Address
 {
 @safe:
     URL inner;
+    string url;
 
     public this (URL url)
     {
@@ -57,6 +58,7 @@ public struct Address
 
     public this (string url)
     {
+        this.url = url;
         this(URL(url));
     }
 

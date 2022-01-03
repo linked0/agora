@@ -469,9 +469,12 @@ public class EnrollmentManager
             return false;
 
         assert(height >= enrolled);
+        import std.stdio;
+        writeln("max_preimage_reveal in getNextPreimage: ",
+            this.max_preimage_reveal);
         const next_reveal = min(height + this.max_preimage_reveal,
                                 enrolled + this.params.ValidatorCycle);
-
+        writeln("next_reveal in getNextPreimage: ", next_reveal);
         if (next_reveal <= height)
             return false;
 
