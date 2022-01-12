@@ -289,7 +289,8 @@ private UnitTestResult customModuleUnitTester ()
             if (chatty)
             {
                 auto output = stdout.lockingTextWriter();
-                output.formattedWrite("Unittesting %s", mod.name);
+                output.formattedWrite("Unittesting %s",
+                    mod.name.splitter('.').array[$-1]);
                 stdout.flush();
             }
             auto sw = StopWatch(AutoStart.yes);
@@ -712,6 +713,11 @@ public class TestAPIManager
 
     ***************************************************************************/
 
+    import std.datetime.stopwatch : AutoStart, StopWatch;
+
+    static int count = 0;
+    static Duration sum;
+
     public void expectHeightAndPreImg (Height height,
         const(BlockHeader) enroll_header = GenesisBlock.header,
         Duration timeout = 10.seconds,
@@ -727,11 +733,21 @@ public class TestAPIManager
         Duration timeout = 10.seconds,
         string file = __FILE__, int line = __LINE__)
     {
+        // auto sw = StopWatch(AutoStart.yes);
         static assert (isInputRange!Idxs);
 
         assert(height > enroll_header.height);
         this.waitForPreimages(clients_idxs, enroll_header.enrollments, height, timeout);
+        // sw.stop();
+        // writeln("\twaitForPreimages : ", sw.peek());
+
+        // auto sw2 = StopWatch(AutoStart.yes);
         this.expectHeight(clients_idxs, height, timeout, file, line);
+        // sw2.stop();
+        // count += 1;
+        // sum += sw2.peek();
+        // writeln("\texpectHeight : ", sw2.peek(), ", count: ", count, 
+        //     ", sum: ", sum);
     }
 
     /***************************************************************************

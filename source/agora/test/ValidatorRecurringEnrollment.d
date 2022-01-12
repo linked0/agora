@@ -25,8 +25,12 @@ import agora.consensus.protocol.Nominator;
 import agora.crypto.Hash;
 import agora.consensus.Ledger;
 
+import std.datetime.stopwatch : AutoStart, StopWatch;
+
 unittest
 {
+    auto sw = StopWatch(AutoStart.yes);
+
     TestConf conf;
     conf.consensus.quorum_threshold = 100;
     auto network = makeTestNetwork!TestAPIManager(conf);
@@ -42,33 +46,13 @@ unittest
     auto blocks = node_0.getBlocksFrom(0, 2);
     assert(blocks.length == 1);
 
-    Transaction[] txs;
+    network.generateBlocks(Height(GenesisValidatorCycle), true);
 
-    void createAndExpectNewBlock (Height new_height)
-    {
-        // create enough tx's for a single block
-        txs = blocks[new_height - 1].spendable().map!(txb => txb.sign()).array();
-
-        // send it to one node
-        txs.each!(tx => node_0.postTransaction(tx));
-
-        network.expectHeightAndPreImg(new_height, blocks[0].header);
-
-        // add next block
-        blocks ~= node_0.getBlocksFrom(new_height, 1);
-    }
-
-    // create GenesisValidatorCycle - 1 blocks
-    foreach (block_idx; 1 .. GenesisValidatorCycle)
-    {
-        createAndExpectNewBlock(Height(block_idx));
-    }
-
-    // Create one last block
-    // if Validators don't re-enroll, this would fail
-    createAndExpectNewBlock(Height(GenesisValidatorCycle));
     // Check if all validators in genesis are enrolled again
     assert(blocks[blocks.length - 1].header.enrollments.length == blocks[0].header.enrollments.length);
+
+    sw.stop();
+    writeln("\nunittest : ", sw.peek());
 }
 
 // Recurring enrollment with wrong `commitment`
@@ -79,6 +63,8 @@ unittest
 {
     import std.exception;
     import core.exception : AssertError;
+
+    auto sw = StopWatch(AutoStart.yes);
 
     // Will always try to enroll with PreImage at Height(0)
     static class BadEnrollmentManager : EnrollmentManager
@@ -118,32 +104,14 @@ unittest
     auto blocks = node_0.getBlocksFrom(0, 2);
     assert(blocks.length == 1);
 
-    Transaction[] txs;
+    network.generateBlocks(Height(GenesisValidatorCycle - 1), true);
 
-    void createAndExpectNewBlock (Height new_height)
-    {
-        // create enough tx's for a single block
-        txs = blocks[new_height - 1].spendable().map!(txb => txb.sign())
-            .array();
+    // Try creating a last block of the validator cycle, should fail
+    assertThrown!AssertError(
+        network.generateBlocks(Height(GenesisValidatorCycle), true));
 
-        // send it to one node
-        txs.each!(tx => node_0.postTransaction(tx));
-
-        network.expectHeightAndPreImg(new_height, blocks[0].header);
-
-        // add next block
-        blocks ~= node_0.getBlocksFrom(new_height, 1);
-    }
-
-    // create GenesisValidatorCycle - 1 blocks
-    foreach (block_idx; 1 .. GenesisValidatorCycle)
-    {
-        createAndExpectNewBlock(Height(block_idx));
-    }
-
-    // Try creating one last block, should fail
-    assertThrown!AssertError(createAndExpectNewBlock(
-        Height(GenesisValidatorCycle)));
+    sw.stop();
+    writeln("unittest : ", sw.peek());
 }
 
 // Not all validators can enroll at the same height again. They should enroll
@@ -151,6 +119,7 @@ unittest
 // create another enrollment request for the next block
 unittest
 {
+    auto sw = StopWatch(AutoStart.yes);
     import std.algorithm.mutation : reverse;
     static class SocialDistancingNominator : Nominator
     {
@@ -197,18 +166,22 @@ unittest
     auto blocks = node_0.getBlocksFrom(0, 2);
     assert(blocks.length == 1);
 
-    network.generateBlocks(Height(GenesisValidatorCycle + 2));
+    network.generateBlocks(Height(GenesisValidatorCycle + 2), true);
     blocks = node_0.getBlocksFrom(10, GenesisValidatorCycle + 3);
     assert(blocks[$ - 1].header.height == Height(GenesisValidatorCycle + 2));
     auto last_enrolls = blocks.retro.take(3).map!(block => block.header.enrollments.length);
     assert(last_enrolls.sum() == 6);
     assert(!last_enrolls.any!(count => count > 3));
+
+    sw.stop();
+    writeln("unittest : ", sw.peek());
 }
 
 // Some nodes are interrupted during their validator cycles, they should
 // still manage to enroll when they are back online
 unittest
 {
+    auto sw = StopWatch(AutoStart.yes);
     TestConf conf;
     conf.consensus.quorum_threshold = 66;
     conf.node.max_retries = 2; // less retries as two are sleeping later
@@ -229,14 +202,14 @@ unittest
     auto node_5 = nodes[5];
 
     // Approach end of the cycle
-    network.generateBlocks(Height(GenesisValidatorCycle - 3));
+    network.generateBlocks(Height(GenesisValidatorCycle - 3), true);
 
     // Make 2 nodes sleep for longer than test can possibly run
     node_4.ctrl.sleep(1.hours, true);
     node_5.ctrl.sleep(1.hours, true);
 
     network.generateBlocks(iota(4),
-        Height(GenesisValidatorCycle - 1));
+        Height(GenesisValidatorCycle - 1), true);
 
     // Wake up node #4 right before cycle ends
     node_4.ctrl.sleep(0.seconds);
@@ -245,7 +218,7 @@ unittest
         Height(GenesisValidatorCycle - 1), network.blocks[0].header);
 
     network.generateBlocks(iota(5), // nodes #0 .. #4
-        Height(GenesisValidatorCycle));
+        Height(GenesisValidatorCycle), true);
 
     blocks = node_0.getBlocksFrom(10, GenesisValidatorCycle + 3);
     auto enrolls1 = blocks[$ - 1].header.enrollments.length;
@@ -259,18 +232,22 @@ unittest
     network.expectHeightAndPreImg(only(5), Height(GenesisValidatorCycle));
 
     network.generateBlocks(iota(GenesisValidators),
-        Height(GenesisValidatorCycle + 1));
+        Height(GenesisValidatorCycle + 1), true);
 
     blocks = node_0.getBlocksFrom(10, GenesisValidatorCycle + 3);
     auto enrolls2 = blocks[$ - 1].header.enrollments.length;
 
     // Now the last node woken up is also enrolled
     assert(enrolls2 == 1);
+
+    sw.stop();
+    writeln("unittest : ", sw.peek());
 }
 
 // No validator will willingly re-enroll until the network is stuck
 unittest
 {
+    auto sw = StopWatch(AutoStart.yes);
     static class BatValidator : TestValidatorNode
     {
         mixin ForwardCtor!();
@@ -298,12 +275,16 @@ unittest
 
     // Even if configured to not re-enroll, BatValidator should enroll if there
     // are not enough validators
-    network.generateBlocks(Height(GenesisValidatorCycle + 1));
+    network.generateBlocks(Height(GenesisValidatorCycle + 1), true);
+
+    sw.stop();
+    writeln("unittest : ", sw.peek());
 }
 
 // Make a validator recur enrollment in the middle of generating blocks
 unittest
 {
+    auto sw = StopWatch(AutoStart.yes);
     TestConf conf = {
         recurring_enrollment : false,
     };
@@ -314,7 +295,7 @@ unittest
     network.waitForDiscovery();
 
     // generate 19 blocks
-    network.generateBlocks(Height(GenesisValidatorCycle - 1));
+    network.generateBlocks(Height(GenesisValidatorCycle - 1), true);
 
     // set the recurring enrollment option to true and check in enrollment pools
     network.validators.each!((node)
@@ -324,7 +305,10 @@ unittest
         network.validators.each!(n =>
             retryFor(n.getEnrollment(enroll.utxo_key) == enroll, 5.seconds));
     });
-    network.generateBlocks(Height(GenesisValidatorCycle));
+    network.generateBlocks(Height(GenesisValidatorCycle), true);
     const b20 = network.clients[0].getBlocksFrom(GenesisValidatorCycle, 1)[0];
     assert(b20.header.enrollments.length == 6);
+
+    sw.stop();
+    writeln("unittest : ", sw.peek());
 }

@@ -16,6 +16,7 @@ module agora.test.Fee;
 import agora.test.Base;
 
 import std.typecons: tuple;
+import std.datetime.stopwatch : AutoStart, StopWatch;
 
 // Normal operation, every `payout_period`th block should
 // include coinbase outputs to validators
@@ -69,7 +70,10 @@ unittest
     // create GenesisValidatorCycle - 1 blocks
     foreach (block_idx; 1 .. GenesisValidatorCycle)
     {
+        auto sw2 = StopWatch(AutoStart.yes);
         createAndExpectNewBlock(Height(block_idx));
+        sw2.stop();
+        writeln("\tcreateAndExpectNewBlock : ", sw2.peek());
     }
 }
 
