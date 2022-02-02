@@ -2221,6 +2221,7 @@ LOuter: while (1)
 
     protected Transaction publishUpdateTx (in UpdatePair update)
     {
+        import agora.utils.PrettyPrinter;
         auto update_tx = update.update_tx.serializeFull.deserializeFull!Transaction();
         assert(update_tx.inputs.length == 1);
         assert(update_tx.outputs.length == 1);
@@ -2264,9 +2265,9 @@ LOuter: while (1)
                 update_tx.inputs[idx].unlock = genKeyUnlock(fee_sig);
 
         auto result = this.txPublisher(update_tx);
-        log.info("{}: Publishing update tx {}: {}. Result: {}",
+        log.info("{}: Publishing update tx {}: {}. Result: {}\nTx: {}",
             this.own_pk.flashPrettify, update.seq_id, update_tx.hashFull().flashPrettify,
-            result);
+            result, update_tx.prettify);
         return update_tx;
     }
 
@@ -2340,6 +2341,8 @@ LOuter: while (1)
     version (unittest)
     public Transaction getPublishUpdateIndex (uint index)
     {
+        log.info("{}: getPublishUpdateIndex: {}", this.own_pk.flashPrettify,
+            index);
         // wait until this update is complete
         while (index >= this.channel_updates.length)
             this.taskman.wait(100.msecs);

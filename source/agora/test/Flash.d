@@ -645,7 +645,7 @@ do
 }
 
 /// Test unilateral non-collaborative close (funding + update* + settle)
-//version (none)
+version (none)
 unittest
 {
     auto conf = flashTestConf(2);
@@ -725,7 +725,7 @@ unittest
 
 /// Test the settlement timeout branch for the
 /// unilateral non-collaborative close (funding + update* + settle)
-//version (none)
+version (none)
 unittest
 {
     auto conf = flashTestConf(2);
@@ -810,7 +810,7 @@ unittest
 
 /// Test attempted collaborative close with a non-collaborative counter-party,
 /// forcing the first counter-party to initiate a non-collaborative close.
-//version (none)
+version (none)
 unittest
 {
     static class RejectingCloseNode : TestFlashNode
@@ -907,7 +907,7 @@ unittest
 }
 
 /// Test indirect channel payments
-//version (none)
+version (none)
 unittest
 {
     auto conf = flashTestConf(3);
@@ -1031,7 +1031,7 @@ unittest
     network.listener.waitUntilChannelState(alice_charlie_chan_id,
         ChannelState.Closed);
 }
-
+version (none)
 /// Test path probing
 unittest
 {
@@ -1170,7 +1170,7 @@ unittest
     assert(update.fixed_fee == Amount(1337));
     assert(update.proportional_fee == Amount(1));
 }
-
+version (none)
 /// Test path probing
 unittest
 {
@@ -1368,7 +1368,7 @@ unittest
     network.listener.waitUntilChannelState(charlie_diego_chan_id,
         ChannelState.Closed);
 }
-
+version (none)
 unittest
 {
     static class BleedingEdgeFlashNode : TestFlashNode
@@ -1448,7 +1448,7 @@ unittest
 }
 
 /// Test node serialization & loading
-//version (none)
+version (none)
 unittest
 {
     auto conf = flashTestConf(2);
@@ -1519,7 +1519,7 @@ unittest
     alice.waitForUpdateIndex(WK.Keys.A.address, chan_id, 6);
     charlie.waitForUpdateIndex(WK.Keys.C.address, chan_id, 6);
 }
-
+version (none)
 /// test various error cases
 unittest
 {
@@ -1692,7 +1692,7 @@ unittest
         PublicNonce.init, Height(100));
     assert(upd_res.error == ErrorCode.MismatchingBlockHeight, upd_res.to!string);
 }
-
+version (none)
 /// test listener API and payment success / failures
 unittest
 {
@@ -1912,10 +1912,13 @@ unittest
     network.expectTxExternalization(update_tx);
     network.listener.waitUntilChannelState(chan_id,
         ChannelState.StartedUnilateralClose);
+    writeln("height: ", network.clients[0].getBlockHeight() );
 
 
     // publish an older update
     update_tx = alice.getPublishUpdateIndex(WK.Keys.A.address, chan_id, 2);
+    import agora.utils.PrettyPrinter;
+    writeln("update tx: ", update_tx.hashFull().flashPrettify);
     network.postAndEnsureTxInPool(update_tx);
     network.expectTxExternalization(update_tx);
 
@@ -1924,16 +1927,21 @@ unittest
     network.clients[0].postTransaction(update_tx);
     assert(!network.clients[0].hasTransactionHash(update_tx.hashFull()));
 
+    writeln("height: ", network.clients[0].getBlockHeight() );
+
     // allow normal node operation again
     alice.setPublishEnable(true);
     charlie.setPublishEnable(true);
 
     update_tx = alice.getPublishUpdateIndex(WK.Keys.A.address, chan_id, 4);
+    writeln("update tx: ", update_tx.hashFull().flashPrettify);
     network.expectTxExternalization(update_tx);
 
     iota(Settle_1_Blocks * 2).each!(idx => network.addBlock());
     network.listener.waitUntilChannelState(chan_id,
         ChannelState.Closed);
+
+    assert(0);
 }
 
 /// Test private channels
