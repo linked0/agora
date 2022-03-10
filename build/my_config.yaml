@@ -1,0 +1,28 @@
+node:
+  realm: "testnet.bosagora.io"
+  testing: true
+  registry_address: https://ns1.bosagora.io/
+
+registry:
+  public: true
+  port: 8053
+
+#consensus:
+#  block_interval:
+#    seconds: 60
+#  validator_cycle: 20
+#  genesis_timestamp: 1645092000
+
+logging:
+  root:
+    # You might want to use `Trace` and separate output
+    level: Info
+    console: true
+    propagate: true
+    file: log/root.log
+
+validator:
+  enabled: true
+  seed: SD5TTVJBPXGCG76NCK7KTYJJ72KG43AFJIB53M2K7AGKXOHH3GAAEBLH
+  addresses_to_register:
+    - "agora://13.124.201.231:2826"
