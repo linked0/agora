@@ -82,6 +82,7 @@ unittest
     network.generateBlocks(iota(0, 5), Height(conf.consensus.payout_period * 3), true);
 }
 
+version (none)
 /// Situation: All the validators do not reveal their pre-images for
 ///     some time in the middle of creating the block of height 2 and
 ///     then start revealing their pre-images.

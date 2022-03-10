@@ -129,6 +129,7 @@ unittest
     network.expectHeightAndPreImg(iota(1, GenesisValidators), Height(1), network.blocks[0].header);
 }
 
+version (none):
 /// Situation: There is a validator does not reveal a pre-image for next
 //      height and the information is contained in a `ConsensusData`. But
 //      a bad nominator manipulates information about the missing preimage

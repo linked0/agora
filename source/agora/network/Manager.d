@@ -909,9 +909,13 @@ public class NetworkManager
         import std.conv;
         import std.range;
         import std.typecons;
+        import agora.utils.PrettyPrinter;
 
         size_t[Height] signed_validators;
 
+        import std.stdio;
+        debug {writeln("###### getMissingBlockSigs");}
+        Height fetched;
         try
         {
             auto start_height = ledger.getLastPaidHeight();
@@ -919,6 +923,8 @@ public class NetworkManager
             size_t[Height] enrolled_validators = headers.map!(header =>
                 tuple(header.height, header.validators.count)).assocArray;
 
+            BlockHeader[Height] stored_headers;
+            headers.each!(header => stored_headers[header.height] = header);
             Set!ulong heightsMissingSigs ()
             {
                 signed_validators =
@@ -937,7 +943,19 @@ public class NetworkManager
                 auto missing_heights = heightsMissingSigs();
                 if (!missing_heights.empty)
                 {
+                    writeln("doCatchup - getMissingBlockSigs: ", missing_heights);
+                    () @trusted
+                    {
+                    auto height = Height(missing_heights.pickRandom(1)[0]);
+                    writeln("enrolled_validators: ",
+                        enrolled_validators[height]);
+                    writeln("signed_validators: ",
+                        signed_validators[height]);
+                    writeln("validators: ", stored_headers[height].validators);
+                    writeln("header: ", stored_headers[height].prettify);
                     log.trace("getMissingBlockSigs: detected missing signatures at heights {}", missing_heights);
+                    fetched = height;
+                    }();
                     foreach (peer; this.peers)
                     {
                         foreach (header; peer.getBlockHeaders(missing_heights))
@@ -967,6 +985,13 @@ public class NetworkManager
 
             // Check last and recent_block_count blocks before last
             doCatchUp();
+
+            if (fetched != Height.init)
+            {
+                auto block = ledger.getBlocksFrom(fetched)[0];
+                writeln("fetched validators: ", block.header.validators);
+                writeln("fetched header: ", block.header.prettify);
+            }
 
         }
         catch (Exception e)

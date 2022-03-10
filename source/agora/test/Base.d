@@ -284,6 +284,7 @@ private UnitTestResult customModuleUnitTester ()
 
     bool runTest (ModTest mod)
     {
+        writeln("###### runTest: ", mod.name);
         atomicOp!"+="(executed, 1);
         try
         {

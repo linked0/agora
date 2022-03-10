@@ -566,6 +566,8 @@ public class FullNode : API
         }
 
         const Height expected = this.ledger.expectedHeight(this.clock.utcTime());
+        import std.stdio;
+        // debug {writeln("expected in catchupTask: ", expected);}
         if (expected < this.ledger.height)
             this.log.warn("Our current Ledger state is ahead of the expected height (current: {}, expected: {}",
                           this.ledger.height, expected);

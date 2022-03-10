@@ -29,6 +29,7 @@ import agora.consensus.Ledger;
 // When nodes reach the end of their validation cycle, they will try to
 // re-enroll with the same commitment in the GenesisBlock (ie. Height(0))
 // They should not be able to enroll and no new block should be created.
+version (none)
 unittest
 {
     import std.exception;
@@ -139,6 +140,7 @@ unittest
     assert(!last_enrolls.any!(count => count > 3));
 }
 
+version (none):
 // Some nodes are interrupted during their validator cycles, they should
 // still manage to enroll when they are back online
 unittest
