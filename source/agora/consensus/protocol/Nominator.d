@@ -514,7 +514,7 @@ extern(D):
         const next_nomination = this.ledger.getExpectedBlockTime(this.ledger.height() + 1);
         if (cur_time < next_nomination)
         {
-            this.log.trace(
+            this.log.info(
                 "checkNominate(): Too early to nominate (current: {}, next: {})",
                 cur_time, next_nomination);
             return;
@@ -522,7 +522,7 @@ extern(D):
 
         if (this.heighest_ballot_height >= slot_idx)
         {
-            this.log.trace("checkNominate(): Balloting already started for height {}" ~
+            this.log.info("checkNominate(): Balloting already started for height {}" ~
                 " skipping new nomination", slot_idx);
             () @trusted
             {
