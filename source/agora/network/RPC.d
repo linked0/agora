@@ -614,7 +614,7 @@ private void handleThrow (API) (scope API api, RPCConnection stream, Duration ti
         return deserializeFull!Target(reader);
     }
 
-    log.trace("[{} - {}] Handling a new request", stream.peerAddress, stream.localAddress);
+    log.info("[{} - {}] Handling a new request", stream.peerAddress, stream.localAddress);
 
     switch (*method)
     {
@@ -624,7 +624,7 @@ private void handleThrow (API) (scope API api, RPCConnection stream, Duration ti
         case ovrld.mangleof:
             enum CallMixin = "api." ~ member ~ "(staticMap!(convert, Parameters!ovrld));";
 
-            log.trace("[SERVER] {} requested {}({})",
+            log.info("[SERVER] {} requested {}({})",
                       stream.peerAddress, member, (Parameters!ovrld).stringof);
 
             // Call functions + return
@@ -634,14 +634,14 @@ private void handleThrow (API) (scope API api, RPCConnection stream, Duration ti
             static if (is(ReturnType!ovrld == void))
             {
                 mixin(CallMixin);
-                log.trace("[SERVER] Goodbye {}", methodbin);
+                log.info("[SERVER] Goodbye {}", methodbin);
             }
             else
             {
                 mixin("auto foo = ", CallMixin);
-                log.trace("[SERVER] Returning {}", foo);
+                log.info("[SERVER] Returning {}", foo);
                 stream.write(serializeFull(foo));
-                log.trace("[SERVER] Done writing...");
+                log.info("[SERVER] Done writing...");
             }
             return;
         }

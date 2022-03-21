@@ -86,7 +86,7 @@ public Listeners runNode (Config config)
     }
 
     auto log = Logger(__MODULE__);
-    log.trace("Config is: {}", config);
+    log.info("Config is: {}", config);
 
     mkdirRecurse(config.node.data_dir);
 
@@ -104,7 +104,7 @@ public Listeners runNode (Config config)
 
     if (config.validator.enabled)
     {
-        log.trace("Started Validator...");
+        log.info("Started Validator...");
         auto inst = new Validator(config);
         if (config.admin.enabled)
             result.admin = inst.makeAdminInterface();

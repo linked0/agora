@@ -328,6 +328,8 @@ public class FullNode : API
         // Create timers
         this.timers[TimersIdx.Discovery] = this.taskman.createTimer(&this.discoveryTask);
         this.timers[TimersIdx.BlockCatchup] = this.taskman.createTimer(&this.catchupTask);
+
+		log.info("FullNode ctor");
     }
 
     mixin DefineCollectorForStats!("app_stats", "collectAppStats");
@@ -821,6 +823,7 @@ public class FullNode : API
     /// Returns: A new instance of a `ManagedDatabase` to use as state DB
     protected ManagedDatabase makeStateDB ()
     {
+		log.info("makeStateDB: ", this.config.node.data_dir);
         return new ManagedDatabase(this.config.node.data_dir.buildPath("state.db"));
     }
 

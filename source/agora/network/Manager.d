@@ -745,6 +745,8 @@ public class NetworkManager
     /// register network addresses into the name registry
     public void onRegisterName () @safe
     {
+	log.info("onRegisterName called");
+
         assert(this.registry_client !is null);
 
         const(Address)[] addresses = this.config.validator.addresses_to_register;
