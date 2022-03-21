@@ -172,6 +172,7 @@ public class NetworkManager
                     import libsodium.crypto_auth;
 
                     const ephemeral_kp = KeyPair.random();
+                    // log.warn("Calling handshake: {}", ephemeral_kp.address);
                     auto id = this.api.handshake(ephemeral_kp.address);
 
                     if (id.key != PublicKey.init)
@@ -320,7 +321,7 @@ public class NetworkManager
         in Address address, agora.api.Validator.API api,
         in Hash utxo, in PublicKey key)
     {
-        log.dbg("onHandshakeComplete: {} - (k: {}, utxo: {})", address, key, utxo);
+        log.warn("onHandshakeComplete: {} - (k: {}, utxo: {})", address, key, utxo);
 
         // We have an authenticated client, maybe we already have a client for it
         if (key !is PublicKey.init)
@@ -643,7 +644,7 @@ public class NetworkManager
                             (in Message msg) @trusted {
                                 if (msg.header.RCODE != Header.RCode.NoError)
                                 {
-                                    log.warn("Could not find mapping in registry for key {}", ckey);
+                                    log.dbg("Could not find mapping in registry for key {}", ckey);
                                     return;
                                 }
 
@@ -891,6 +892,8 @@ public class NetworkManager
     {
         import std.typecons : tuple;
 
+        log.error("********** START of getBlocksFrom **********");
+
         // return ulong.max if getBlockHeight() fails
         Height getHeight (NetworkClient node)
         {
@@ -899,6 +902,14 @@ public class NetworkManager
             catch (Exception ex)
                 return Height(ulong.max);
         }
+
+        if (this.peers.front !is null)
+        {
+            import agora.consensus.data.ValidatorInfo;
+            ValidatorInfo[] infos = this.peers.front.getValidators();
+            log.warn("{} Validators: {}", __FUNCTION__, infos);
+        }
+
 
         foreach (node, peer_height; this.peers.map!(node => tuple(node, getHeight(node))))
         {
@@ -917,10 +928,12 @@ public class NetworkManager
 
             try
             {
+                log.info("========== Before onReceivedBlocks");
                 // update the height with the latest accepted height
                 const new_height = onReceivedBlocks(blocks);
                 if (new_height >= height)
                     height = new_height + 1;
+                log.info("========== After onReceivedBlocks");
             }
             catch (Exception ex)
             {
@@ -929,6 +942,8 @@ public class NetworkManager
                 log.error("Error in onReceivedBlocks(): {}", ex);
             }
         }
+
+        log.error("********** END of getBlocksFrom **********");
     }
 
     /***************************************************************************
@@ -1003,6 +1018,7 @@ public class NetworkManager
 
         size_t[Height] signed_validators;
 
+        log.error("#========# getMissingBlockSigs STAAAAAAAAAART!");
         try
         {
             auto start_height = ledger.getLastPaidHeight();
@@ -1028,15 +1044,17 @@ public class NetworkManager
                 return Set!ulong.from(headers.map!(h => h.height).filter!(height => signed_validators[height] < enrolledValidators(height)));
             }
 
+            log.error("#========# getMissingBlockSigs MIIIIIIIIIIIIIDLE!");
+
             void doCatchUp ()
             {
                 auto missing_heights = heightsMissingSigs();
                 if (!missing_heights.empty)
                 {
-                    log.trace("{}: detected missing signatures at heights {}", __FUNCTION__, missing_heights);
+                    log.error("detected missing signatures at heights {}", missing_heights);
                     foreach (peer; this.peers)
                     {
-                        log.dbg("{}: peer: [ {}, {} ]", __FUNCTION__, peer.identity.key, peer.addresses);
+                        log.error("peer: [ {}, {} ]", peer.identity.key, peer.addresses);
                         foreach (header; peer.getBlockHeaders(missing_heights))
                         {
                             log.dbg("{}: check header: height {} validators {}", __FUNCTION__, header.height, header.validators);
@@ -1048,10 +1066,10 @@ public class NetworkManager
                                 try
                                 {
                                     if (auto res = acceptHeader(header))
-                                        log.dbg("{}: couldn't update header ({})", __FUNCTION__, header.height);
+                                        log.error("{}: couldn't update header ({})", __FUNCTION__, header.height);
                                     else
                                     {
-                                        log.trace("{}: updated header ({}) signature: {} validators: {}",
+                                        log.error("{}: updated header ({}) signature: {} validators: {}",
                                             __FUNCTION__, header.height, header.signature, header.validators);
                                         missing_heights.remove(header.height);
                                     }
@@ -1070,13 +1088,16 @@ public class NetworkManager
             }
 
             // Check last and recent_block_count blocks before last
+            log.error("#========# getMissingBlockSigs doCatchUp START!");
             doCatchUp();
+            log.error("#========# getMissingBlockSigs doCatchUp END!");
 
         }
         catch (Exception e)
         {
             log.error("getMissingBlockSigs: Exception thrown : {}", e.msg);
         }
+        log.error("#========# getMissingBlockSigs EEEEEEEEEEEEEEEND!");
     }
 
     /// Shut down timers & dump the metadata

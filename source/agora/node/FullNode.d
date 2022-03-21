@@ -529,8 +529,12 @@ public class FullNode : API
 
     protected void catchupTask () nothrow
     {
+        log.error("########## catchupTask START!");
+
         scope (exit)
         {
+            log.error("catchupTask END!! interval: {}", __FUNCTION__,
+                this.config.node.block_catchup_interval);
             this.startTaskTimer(TimersIdx.BlockCatchup, this.config.node.block_catchup_interval);
         }
 
@@ -542,6 +546,8 @@ public class FullNode : API
             return;
         }
 
+        log.error("#========# catchupTask MIDDLE!");
+
         try
         {
             this.network.getMissingBlockSigs(this.ledger, &this.potentialExtraSigs, &this.acceptHeader);
@@ -550,6 +556,8 @@ public class FullNode : API
         {
             log.error("{}: Error sending updated block headers:{}", __FUNCTION__, e);
         }
+
+        log.error("#========# catchupTask LATER!");
 
         const Height expected = this.ledger.expectedHeight(this.clock.utcTime());
         if (expected < this.ledger.height)

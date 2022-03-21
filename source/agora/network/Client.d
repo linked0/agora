@@ -23,6 +23,7 @@ import agora.consensus.data.Enrollment;
 import agora.consensus.data.PreImageInfo;
 import agora.consensus.data.Transaction;
 import agora.consensus.data.ValidatorBlockSig;
+import agora.consensus.data.ValidatorInfo;
 import agora.crypto.Key;
 import scpd.types.Stellar_SCP;
 
@@ -602,6 +603,11 @@ public class NetworkClient
         return this.attemptRequest!(API.getTxSet, Throw.No)(hash);
     }
 
+    public ValidatorInfo[] getValidators () @trusted nothrow
+    {
+        return this.attemptRequest!(API.getValidators, Throw.No)();
+    }
+
     /***************************************************************************
 
         Attempt a request up to 'this.max_retries' attempts, and make the task
@@ -643,14 +649,22 @@ public class NetworkClient
                 return T.init;
         }
 
+        log.error("attemptRequest: {} , max_retries: {}", name, this.max_retries);
+
     RETRY: foreach (idx; 1 .. this.max_retries + 1)
         {
+            log.error("Client.attemptRequest '{}' TRY idx: {}", name, idx);
             // Clients without connections should not wait and instead error out
             if (!this.connections.length)
+            {
+                log.error("Client.attemptRequest '{}' TRY connection: {}", name, this.connections.length);
                 return onError();
+            }
 
+            log.error("Client.attemptRequest '{}' TRY idx: {} MIDDLE", name, idx);
             foreach (conn; this.connections)
             {
+                log.warn("Client.attemptRequest '{}' TRY idx: {} in foreach", name, idx);
                 if (this.banman.isBanned(conn.address))
                 {
                     try
@@ -665,8 +679,8 @@ public class NetworkClient
                 {
                     try
                     {
-                        log.dbg("Client.attemptRequest '{}' to {}: {}/{}", name, conn.address, idx, this.max_retries);
-                        scope (success) this.log.format(log_level, "Client.attemptRequest '{}' to {}: {}/{} SUCCESS",
+                        log.error("Client.attemptRequest '{}' to {}: {}/{}", name, conn.address, idx, this.max_retries);
+                        scope (success) this.log.format(LogLevel.Error, "Client.attemptRequest '{}' to {}: {}/{} SUCCESS",
                             name, conn.address, idx, this.max_retries);
                         return __traits(getMember, conn.api, name)(args);
                     }
@@ -692,9 +706,10 @@ public class NetworkClient
             }
             if (idx < this.max_retries) // wait after each failure except last
             {
-                log.dbg("Client.attemptRequest '{}' to addresses {} attempt {}/{} FAILED - wait {} before retry",
+                log.error("Client.attemptRequest '{}' to addresses {} attempt {}/{} FAILED - wait {} before retry",
                     name, this.connections.map!(c => c.address), idx, this.max_retries, this.retry_delay);
                 this.taskman.wait(this.retry_delay);
+                log.error("Client.attemptRequest '{}' DELAY Ends!", name);
             }
         }
         log.warn("Client.attemptRequest '{}' to addresses {} FAILED after {} attempts",

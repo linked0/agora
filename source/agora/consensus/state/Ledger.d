@@ -577,6 +577,7 @@ public class Ledger
 
     protected void updateValidatorSet (in Block block) @safe
     {
+        log.warn("updateValidatorSet at {}", block.header.height);
         foreach (idx, ref enrollment; block.header.enrollments)
         {
             UTXO utxo;
@@ -592,6 +593,8 @@ public class Ledger
                 log.fatal("Validated block: {}", block);
                 assert(0);
             }
+            log.info("New validator at height {}: {} (UTXO: {})",
+                     block.header.height, utxo.output.address, enrollment.utxo_key);
             this.utxo_set.updateUTXOLock(enrollment.utxo_key, block.header.height + this.params.ValidatorCycle);
         }
     }

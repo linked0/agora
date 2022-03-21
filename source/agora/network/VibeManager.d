@@ -264,6 +264,8 @@ private final class VibeDNSResolver : DNSResolver
                     conn.read(buffer[0 .. 2]);
                     const ushort size = deserializeFull!ushort(
                         buffer[0 .. 2], DeserializerOptions(DefaultMaxLength, CompactMode.No));
+                    log.info("Got response from '{}' for '{}' : size: {}",
+                          peer.address, msg, size);
 
                     // DNS TCP message size is not limited from Agora registry while sending
                     // but here received message size is not in our control,
@@ -272,7 +274,7 @@ private final class VibeDNSResolver : DNSResolver
                     conn.close();
 
                     auto answer = deserializeFull!Message(buffer[0 .. size]);
-                    log.trace("Got response from '{}' for '{}' : {}",
+                    log.info("Got response from '{}' for '{}' : {}",
                           peer.address, msg, answer);
 
                     return answer;

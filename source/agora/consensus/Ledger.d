@@ -166,6 +166,7 @@ public class NodeLedger : Ledger
     /// See `Ledger.updateValidatorSet`
     protected override void updateValidatorSet (in Block block) @safe
     {
+        log.warn("updateValidatorSet in NodeLedger called at {}", block.header.height);
         PublicKey pubkey = this.enroll_man.getEnrollmentPublicKey();
         UTXO[Hash] utxos = this.utxo_set.getUTXOs(pubkey);
 
@@ -183,6 +184,8 @@ public class NodeLedger : Ledger
                 log.fatal("Validated block: {}", block);
                 assert(0);
             }
+            log.info("New validator added at height {}: {} (UTXO: {})",
+                     block.header.height, utxo.output.address, enrollment.utxo_key);
             this.utxo_set.updateUTXOLock(enrollment.utxo_key, block.header.height + this.params.ValidatorCycle);
             this.pool.removeSpenders(enrollment.utxo_key);
         }

@@ -274,6 +274,8 @@ public class Validator : FullNode, API
     ///
     public override Identity handshake (in PublicKey peer)
     {
+        log.warn ("{}: peer: {} at hieght {}", __FUNCTION__, peer, this.ledger.height());
+
         return this.getPublicKey(peer);
     }
 
@@ -395,9 +397,12 @@ public class Validator : FullNode, API
 
     protected override string acceptBlock (in Block block) @trusted
     {
-        log.dbg("{}: height = {}", __FUNCTION__, block.header.height);
+        log.info("{}: height = {}", __FUNCTION__, block.header.height);
         if (auto fail_msg = super.acceptBlock(block))
+		{
+			log.info("{}: acceptBlock failed: {}", __FUNCTION__, fail_msg);
             return fail_msg;
+		}
 
         // If node has block ready to externalize waiting for signatures we can reset it
         this.nominator.resetPendingBlock(block.header.height);
