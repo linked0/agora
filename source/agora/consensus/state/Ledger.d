@@ -592,6 +592,9 @@ public class Ledger
                 log.fatal("Validated block: {}", block);
                 assert(0);
             }
+            log.info("New validator added {} at height {}: {} (UTXO: {})",
+                     idx, block.header.height, utxo.output.address,
+                     enrollment.utxo_key);
             this.utxo_set.updateUTXOLock(enrollment.utxo_key, block.header.height + this.params.ValidatorCycle);
         }
     }
