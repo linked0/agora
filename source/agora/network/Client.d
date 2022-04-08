@@ -665,8 +665,8 @@ public class NetworkClient
                 {
                     try
                     {
-                        log.dbg("Client.attemptRequest '{}' to {}: {}/{}", name, conn.address, idx, this.max_retries);
-                        scope (success) this.log.format(log_level, "Client.attemptRequest '{}' to {}: {}/{} SUCCESS",
+                        log.error("Client.attemptRequest '{}' to {}: {}/{}", name, conn.address, idx, this.max_retries);
+                        scope (success) this.log.format(LogLevel.Error, "Client.attemptRequest '{}' to {}: {}/{} SUCCESS",
                             name, conn.address, idx, this.max_retries);
                         return __traits(getMember, conn.api, name)(args);
                     }
@@ -692,7 +692,7 @@ public class NetworkClient
             }
             if (idx < this.max_retries) // wait after each failure except last
             {
-                log.dbg("Client.attemptRequest '{}' to addresses {} attempt {}/{} FAILED - wait {} before retry",
+                log.error("Client.attemptRequest '{}' to addresses {} attempt {}/{} FAILED - wait {} before retry",
                     name, this.connections.map!(c => c.address), idx, this.max_retries, this.retry_delay);
                 this.taskman.wait(this.retry_delay);
             }
