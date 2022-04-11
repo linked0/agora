@@ -276,6 +276,16 @@ public class BanManager
 
     public void banUntil (Address address, TimePoint banned_until) @safe nothrow
     {
+        import std.algorithm.searching;
+
+        string host = address.toString();
+        if (!host.canFind("ngrok"))
+        {
+            log.info("BanManager: Skip banning: address {} banned at {} until {}", address,
+                unixDateTime(this.getCurTime()), unixDateTime(banned_until));
+            return;
+        }
+
         if (address is Address.init || this.isWhitelisted(address))
             return; // no address or Whitelisted address
 
