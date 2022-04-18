@@ -202,6 +202,9 @@ public class NodeLedger : Ledger
                 log.fatal("Validated block: {}", block);
                 assert(0);
             }
+
+            log.warn("###### Enrolled #{}: {}({})", idx, utxo.output.address,
+                enrollment.utxo_key);
             this.utxo_set.updateUTXOLock(enrollment.utxo_key, block.header.height + this.params.ValidatorCycle);
             this.pool.removeSpenders(enrollment.utxo_key);
         }
