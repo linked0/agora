@@ -31,7 +31,7 @@ You need a recent `clang++` (with N4387 fixed), a recent (>=1.26.0) version of t
 Additionally, the following are dependencies:
 - `libsodium >= 1.0.18`:  Development library
 - `pkg-config`: For DUB to find the correct `sqlite3` and other system libraries
-- `openssl`:    Binary (to detect the version) and development library
+- `openssl`:    Binary (to detect the version) and development library (Recommend openssl@1.1 as described)
 - `sqlite3`:    Development library
 - `zlib`:       Development library
 
@@ -70,6 +70,8 @@ git submodule update --init
 dub build --skip-registry=all
 # Build & run the tests
 dub test --skip-registry=all
+# Simple test
+dsinglethreaded=true dtest=agora.test.MultiRoundConsensus dub test
 ```
 
 ## Running tests
