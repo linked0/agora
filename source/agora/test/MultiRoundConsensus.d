@@ -104,4 +104,6 @@ unittest
     assert(CustomNominator.round_number >= 2,
         format("The validator's round number is %s. Expected: above %s",
             CustomNominator.round_number, 2));
+
+    writeln("CustomerNominator.rount_number: %s", CustomNominator.round_number);
 }

@@ -47,6 +47,7 @@ import scpd.types.Stellar_types : NodeID;
 
 import std.algorithm;
 import std.range : array, enumerate;
+import std.stdio;
 
 import core.time;
 
@@ -69,6 +70,9 @@ public class Validator : FullNode, API
 
     /// Currently active quorum configuration
     protected QuorumConfig qc;
+
+    /// 
+    protected QuorumConfig[NodeID] quorums;
 
     /// Quorum generator parameters
     protected QuorumParams quorum_params;
@@ -114,6 +118,11 @@ public class Validator : FullNode, API
         // currently we are not saving preimage info,
         // we only have the commitment in the genesis block
         this.regenerateQuorums(this.ledger.height());
+
+        () @trusted {
+            writeln("Quorums", this.quorums);
+            writeln("QC", this.qc);
+        }();
     }
 
     /***************************************************************************
@@ -139,6 +148,7 @@ public class Validator : FullNode, API
 
     private void regenerateQuorums (Height height) @safe
     {
+        writeln("Validator > Validator.regenerateQuorums: ", height);
         this.last_shuffle_height = height;
         this.required_peer_utxos = typeof(this.required_peer_utxos).init;
 
@@ -166,7 +176,7 @@ public class Validator : FullNode, API
         NodeID node_id = utxo_keys.countUntil(this_utxo);
         this.nominator.updateSCPObject(node_id);
 
-        static QuorumConfig[NodeID] quorums;
+        quorums = typeof(quorums).init;
         this.rebuildQuorumConfig(quorums, utxo_keys, height);
         this.qc = quorums[node_id];
         this.nominator.setQuorumConfig(node_id, quorums);
@@ -427,6 +437,7 @@ public class Validator : FullNode, API
     public override void postEnvelope (SCPEnvelope envelope) @safe
     {
         this.recordReq("postEnvelope");
+        writeln("Validator > Validator.postEnvelope: ", envelope);
         this.nominator.receiveEnvelope(envelope);
     }
 

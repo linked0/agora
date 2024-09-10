@@ -952,10 +952,14 @@ public class TestAPIManager
 
         // have to wait indefinitely as the constructor is
         // currently a slow routine, stalling the call to start().
-        foreach (dns_node; this.dns)
+        foreach (dns_node; this.dns) {
+            writeln("TestAPIManager > Starting DNS node ", dns_node.address);
             dns_node.client.ctrl.withTimeout(0.msecs, startDg);
-        foreach (node; this.nodes)
+        }
+        foreach (node; this.nodes) {
+            writeln("TestAPIManager > Starting node ", node.address);
             node.client.ctrl.withTimeout(0.msecs, startDg);
+        }
     }
 
     /***************************************************************************
